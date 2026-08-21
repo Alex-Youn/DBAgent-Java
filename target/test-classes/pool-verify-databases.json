@@ -1,0 +1,29 @@
+{
+  "groups": [
+    {
+      "group_name": "verify",
+      "instances": [
+        {
+          "id": "with_pool",
+          "name": "With explicit pool sizes",
+          "host": "localhost",
+          "port": 1521,
+          "sid": "ORCL",
+          "user": "test",
+          "password": "test",
+          "pool_min_idle": 7,
+          "pool_max_size": 42
+        },
+        {
+          "id": "without_pool",
+          "name": "Without pool fields",
+          "host": "localhost",
+          "port": 1521,
+          "sid": "ORCL",
+          "user": "test",
+          "password": "test"
+        }
+      ]
+    }
+  ]
+}

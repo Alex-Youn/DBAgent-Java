@@ -1,0 +1,6 @@
+
+jdk17/
+*.jar
+.gradle/
+build/
+bin/

@@ -1,0 +1,91 @@
+{
+  "groups": [
+    {
+      "group_name": "특허넷 통합DB",
+      "instances": [
+        {
+          "id": "patent_integ_1",
+          "name": "통합DB #1 (ORCL1)",
+          "host": "",
+          "port": 1521,
+          "sid": "ORCL",
+          "user": "dbagent_user",
+          "password": "B64(ZGJhZ2VudDAx)",
+          "pool_min_idle": null,
+          "pool_max_size": null,
+          "accounts": [
+            {
+              "user": "apdba",
+              "password": "B64(YXBkYmE=)"
+            }
+          ]
+        },
+        {
+          "id": "patent_integ_2",
+          "name": "통합DB #2 (ORCL2)",
+          "host": "",
+          "port": 1521,
+          "sid": "ORCL2",
+          "user": "dbagent_user",
+          "password": "B64(ZGJhZ2VudDAx)",
+          "pool_min_idle": null,
+          "pool_max_size": null
+        }
+      ]
+    },
+    {
+      "group_name": "특허넷 검색DB",
+      "instances": [
+        {
+          "id": "patent_search_1",
+          "name": "검색DB #1",
+          "host": "",
+          "port": 1521,
+          "sid": "SRCH1",
+          "user": "system",
+          "password": "B64(c3lz)",
+          "pool_min_idle": null,
+          "pool_max_size": null
+        },
+        {
+          "id": "patent_search_2",
+          "name": "검색DB #2",
+          "host": "",
+          "port": 1521,
+          "sid": "SRCH2",
+          "user": "system",
+          "password": "B64(c3lz)",
+          "pool_min_idle": null,
+          "pool_max_size": null
+        }
+      ]
+    },
+    {
+      "group_name": "특허업무 포탈",
+      "instances": [
+        {
+          "id": "patent_portal_1",
+          "name": "포탈 #1",
+          "host": "",
+          "port": 1521,
+          "sid": "PORT1",
+          "user": "system",
+          "password": "B64(c3lz)",
+          "pool_min_idle": null,
+          "pool_max_size": null
+        },
+        {
+          "id": "patent_portal_2",
+          "name": "포탈 #2",
+          "host": "",
+          "port": 1521,
+          "sid": "PORT2",
+          "user": "system",
+          "password": "B64(c3lz)",
+          "pool_min_idle": null,
+          "pool_max_size": null
+        }
+      ]
+    }
+  ]
+}

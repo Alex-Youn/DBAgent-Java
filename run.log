@@ -1,0 +1,29 @@
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.5)
+
+2026-08-12T09:52:00.706+09:00  INFO 6892 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 6892 (C:\AI-PROJECTS\DBAgent-Java\target\dbagent-java-0.1.0.jar started by Administrator in C:\AI-PROJECTS\DBAgent-Java)
+2026-08-12T09:52:00.709+09:00  INFO 6892 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-08-12T09:52:01.588+09:00  INFO 6892 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8005 (http)
+2026-08-12T09:52:01.599+09:00  INFO 6892 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-12T09:52:01.599+09:00  INFO 6892 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
+2026-08-12T09:52:01.631+09:00  INFO 6892 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-08-12T09:52:01.632+09:00  INFO 6892 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 872 ms
+2026-08-12T09:52:01.813+09:00  INFO 6892 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-12T09:52:01.983+09:00  INFO 6892 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@38b3f208
+2026-08-12T09:52:01.984+09:00  INFO 6892 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-12T09:52:02.043+09:00  INFO 6892 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-08-12T09:52:02.271+09:00  INFO 6892 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8005 (http) with context path '/'
+2026-08-12T09:52:02.279+09:00  INFO 6892 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 1.859 seconds (process running for 2.191)
+2026-08-12T09:52:08.226+09:00  INFO 6892 --- [nio-8005-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-12T09:52:08.228+09:00  INFO 6892 --- [nio-8005-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-12T09:52:08.229+09:00  INFO 6892 --- [nio-8005-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-08-12T09:52:08.270+09:00  INFO 6892 --- [nio-8005-exec-1] com.zaxxer.hikari.HikariDataSource       : oracle-default - Starting...
+2026-08-12T09:52:08.759+09:00  INFO 6892 --- [nio-8005-exec-1] com.zaxxer.hikari.pool.HikariPool        : oracle-default - Added connection oracle.jdbc.driver.T4CConnection@6182c74e
+2026-08-12T09:52:08.760+09:00  INFO 6892 --- [nio-8005-exec-1] com.zaxxer.hikari.HikariDataSource       : oracle-default - Start completed.
