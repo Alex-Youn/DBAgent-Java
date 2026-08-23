@@ -8,23 +8,34 @@
 
  :: Spring Boot ::                (v3.3.5)
 
-2026-08-21T20:48:51.467+09:00  INFO 65064 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 65064 (C:\AI-Projects\DBAgent-Java\dist\dbagent-java-0.1.0.jar started by À±¼­Áø in C:\AI-Projects\DBAgent-Java\dist)
-2026-08-21T20:48:51.470+09:00  INFO 65064 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
-2026-08-21T20:48:52.497+09:00  INFO 65064 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
-2026-08-21T20:48:52.504+09:00  INFO 65064 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-08-21T20:48:52.504+09:00  INFO 65064 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
-2026-08-21T20:48:52.526+09:00  INFO 65064 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-08-21T20:48:52.527+09:00  INFO 65064 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 997 ms
-2026-08-21T20:48:52.708+09:00  INFO 65064 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-08-21T20:48:52.929+09:00  INFO 65064 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@104dc1a2
-2026-08-21T20:48:52.931+09:00  INFO 65064 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-08-21T20:48:53.009+09:00  INFO 65064 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
-2026-08-21T20:48:53.244+09:00  INFO 65064 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8006 (http) with context path '/'
-2026-08-21T20:48:53.252+09:00  INFO 65064 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 2.05 seconds (process running for 2.405)
-2026-08-21T20:48:55.462+09:00  INFO 65064 --- [nio-8006-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-08-21T20:48:55.462+09:00  INFO 65064 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-08-21T20:48:55.463+09:00  INFO 65064 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
-2026-08-21T20:49:00.299+09:00  INFO 65064 --- [nio-8006-exec-4] com.zaxxer.hikari.HikariDataSource       : oracle-default - Starting...
-2026-08-21T20:49:00.300+09:00  INFO 65064 --- [nio-8006-exec-4] com.zaxxer.hikari.HikariDataSource       : oracle-default - Start completed.
-2026-08-21T20:49:00.398+09:00  INFO 65064 --- [nio-8006-exec-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Starting...
-2026-08-21T20:49:00.399+09:00  INFO 65064 --- [nio-8006-exec-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Start completed.
+2026-08-24T01:23:17.255+09:00  INFO 72932 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 72932 (C:\AI-Projects\DBAgent-Java\dist\dbagent-java-0.1.0.jar started by À±¼­Áø in C:\AI-Projects\DBAgent-Java\dist)
+2026-08-24T01:23:17.258+09:00  INFO 72932 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-08-24T01:23:18.154+09:00  INFO 72932 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
+2026-08-24T01:23:18.163+09:00  INFO 72932 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-24T01:23:18.163+09:00  INFO 72932 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
+2026-08-24T01:23:18.189+09:00  INFO 72932 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-08-24T01:23:18.190+09:00  INFO 72932 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 874 ms
+2026-08-24T01:23:18.390+09:00  INFO 72932 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-24T01:23:18.557+09:00  INFO 72932 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@62765aec
+2026-08-24T01:23:18.559+09:00  INFO 72932 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-24T01:23:18.642+09:00  INFO 72932 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-08-24T01:23:18.843+09:00  WARN 72932 --- [           main] ConfigServletWebServerApplicationContext : Exception encountered during context initialization - cancelling refresh attempt: org.springframework.context.ApplicationContextException: Failed to start bean 'webServerStartStop'
+2026-08-24T01:23:18.844+09:00  INFO 72932 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...
+2026-08-24T01:23:18.846+09:00  INFO 72932 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.
+2026-08-24T01:23:18.857+09:00  INFO 72932 --- [           main] .s.b.a.l.ConditionEvaluationReportLogger : 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2026-08-24T01:23:18.872+09:00 ERROR 72932 --- [           main] o.s.b.d.LoggingFailureAnalysisReporter   : 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Web server failed to start. Port 8006 was already in use.
+
+Action:
+
+Identify and stop the process that's listening on port 8006 or configure this application to listen on another port.
+
