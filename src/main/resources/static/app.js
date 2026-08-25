@@ -45,6 +45,28 @@ function getToken() {
 
 ;(async function initApp() {
     try {
+        // Caps Lock 경고 - 비밀번호 입력란 전부에 부착 (로그인 실패 원인 중 흔한 케이스라 즉시 알려줌)
+        function attachCapsLockWarning(inputId, warningId) {
+            const input = document.getElementById(inputId);
+            const warning = document.getElementById(warningId);
+            if (!input || !warning) return;
+            const check = (e) => {
+                const isOn = typeof e.getModifierState === 'function' && e.getModifierState('CapsLock');
+                warning.style.display = isOn ? 'block' : 'none';
+            };
+            input.addEventListener('keydown', check);
+            input.addEventListener('keyup', check);
+            input.addEventListener('blur', () => { warning.style.display = 'none'; });
+        }
+        [
+            ['login-password', 'login-password-capslock'],
+            ['pwd-current', 'pwd-current-capslock'],
+            ['pwd-new', 'pwd-new-capslock'],
+            ['pwd-confirm', 'pwd-confirm-capslock'],
+            ['new-user-password', 'new-user-password-capslock'],
+            ['new-user-password-confirm', 'new-user-password-confirm-capslock'],
+        ].forEach(([inputId, warningId]) => attachCapsLockWarning(inputId, warningId));
+
         // Attach auth event listeners
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -477,6 +499,9 @@ function getToken() {
                             if(svg) svg.style.color = 'var(--success)';
                             
                             window.currentDbId = inst.id;
+                            // 인스턴스별 세션 임계치 오버라이드 (databases.json의 "session_thresholds": [t1..t5]),
+                            // 없으면 undefined -> getSessColor()가 자동으로 기본값(DEFAULT_SESSION_THRESHOLDS) 사용.
+                            window.currentSessionThresholds = Array.isArray(inst.session_thresholds) ? inst.session_thresholds : null;
                             if (typeof resetAllDashboardWidgets === 'function') resetAllDashboardWidgets();
                             switchTab('dashboard');
                             fetchDashboard();
@@ -581,6 +606,10 @@ function getToken() {
         // Populate the account dropdown for the currently selected DB
         if (targetId === 'sqlrunner' && typeof window.loadSqlRunnerAccounts === 'function') {
             window.loadSqlRunnerAccounts();
+        }
+        if (targetId === 'sqltuning' && typeof window.loadSqlTuningAccounts === 'function') {
+            window.loadSqlTuningAccounts();
+            if (typeof window.renderSqlTuningBindFields === 'function') window.renderSqlTuningBindFields();
         }
 
         // Auto-fetch data if tmlock
@@ -1942,12 +1971,26 @@ let layoutHTML = "";
     const dashHistory = {
         labels: [],
         cpu: [],
-        mem: [],
-        sess: []
+        mem: []
     };
     
     const maxDashPoints = 300; // 5 minutes at 1s interval
     
+    // 기본 임계치(전역) - DB별로 databases.json 인스턴스에 "session_thresholds": [t1,t2,t3,t4,t5] 를
+    // 추가하면(예: [200,300,400,500,600]) 그 DB에서는 이 기본값 대신 그 값을 사용함 (window.currentSessionThresholds,
+    // instLink 클릭 시 채워짐 - 아래 DB 트리 로딩 부분 참고).
+    const DEFAULT_SESSION_THRESHOLDS = [60, 70, 80, 90, 100];
+
+    function getSessColor(count, thresholds) {
+        const t = (thresholds && thresholds.length === 5) ? thresholds : DEFAULT_SESSION_THRESHOLDS;
+        if (count >= t[4]) return '#7f1d1d';
+        if (count >= t[3]) return '#b91c1c';
+        if (count >= t[2]) return '#ef4444';
+        if (count >= t[1]) return '#f59e0b';
+        if (count >= t[0]) return '#eab308';
+        return '#10b981';
+    }
+
     function createSegmentedDoughnutChart(ctx, value, activeColor) {
         const segments = 10;
         const dataArr = Array(segments).fill(1);
@@ -1982,67 +2025,6 @@ let layoutHTML = "";
         });
     }
 
-    function createSparkline(ctx, data, color, yMax = null) {
-        const nowTime = new Date().getTime();
-        const config = {
-            type: 'line',
-            data: {
-                labels: dashHistory.labels,
-                datasets: [{
-                    data: data,
-                    borderColor: color,
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                    borderWidth: 1.5,
-                    pointRadius: 1.5,
-                    pointHoverRadius: 3,
-                    fill: true,
-                    tension: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 0 },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { enabled: false }
-                },
-                scales: {
-                    x: {
-                        display: true,
-                        type: 'time',
-                        time: {
-                            unit: 'minute',
-                            stepSize: 5,
-                            displayFormats: {
-                                minute: 'HH:mm'
-                            }
-                        },
-                        min: nowTime - (5 * 60 * 1000),
-                        max: nowTime,
-                        ticks: { display: true, color: 'rgba(255, 255, 255, 0.6)', font: { size: 10 } },
-                        grid: { drawOnChartArea: false },
-                        border: { display: true, color: 'rgba(255, 255, 255, 1)', width: 1 }
-                    },
-                    y: { 
-                        display: true,
-                        min: 0,
-                        max: 100,
-                        ticks: { 
-                            display: true, 
-                            stepSize: 20, 
-                            color: 'rgba(255, 255, 255, 0.6)', 
-                            font: { size: 10 } 
-                        },
-                        grid: { drawOnChartArea: false },
-                        border: { display: true, color: 'rgba(255, 255, 255, 1)', width: 1 }
-                    }
-                }
-            }
-        };
-        return new Chart(ctx, config);
-    }
-    
     // Track which db_id each fetch is in flight for (not just a boolean): lets switching DB
     // start a fresh request immediately instead of being blocked by the previous DB's slow one,
     // and lets a late/stale response be discarded if the user has since switched DBs.
@@ -2128,7 +2110,10 @@ let layoutHTML = "";
                     else dashCpuVal.style.color = 'var(--text-main)';
                 }
                 if (dashMemVal) dashMemVal.innerText = `${data.memory}%`;
-                if (dashSessVal) dashSessVal.innerText = data.active_sessions;
+                if (dashSessVal) {
+                    dashSessVal.innerText = data.active_sessions;
+                    dashSessVal.style.color = getSessColor(data.active_sessions, window.currentSessionThresholds);
+                }
                 
                 // Update Memory color based on usage
                 if (dashMemVal) {
@@ -2142,13 +2127,11 @@ let layoutHTML = "";
                 dashHistory.labels.push(nowTime);
                 dashHistory.cpu.push(data.cpu);
                 dashHistory.mem.push(data.memory);
-                dashHistory.sess.push(data.active_sessions);
-                
+
                 if (dashHistory.labels.length > maxDashPoints) {
                     dashHistory.labels.shift();
                     dashHistory.cpu.shift();
                     dashHistory.mem.shift();
-                    dashHistory.sess.shift();
                 }
                 
                 const cpuCtx = document.getElementById('dash-cpu-chart');
@@ -2194,11 +2177,26 @@ let layoutHTML = "";
                     }
                 }
                 
-                if (sessCtx && !dashSessChart) dashSessChart = createSparkline(sessCtx, dashHistory.sess, '#10b981');
-                else if (dashSessChart) {
-                    dashSessChart.options.scales.x.min = nowTime - (5 * 60 * 1000);
-                    dashSessChart.options.scales.x.max = nowTime;
-                    dashSessChart.update();
+                if (sessCtx) {
+                    const sessThresholds = window.currentSessionThresholds || DEFAULT_SESSION_THRESHOLDS;
+                    const sessColor = getSessColor(data.active_sessions, sessThresholds);
+                    // 링은 이 DB의 최상위 임계치(다섯 번째 값) 기준으로 꽉 채워짐 - DB마다 정상 범위가 다르므로
+                    // 절대 100이 아니라 그 DB의 "심각" 기준에 도달했을 때 100%로 보이게 함.
+                    const sessPercent = Math.min((data.active_sessions / sessThresholds[4]) * 100, 100);
+
+                    const segments = 10;
+                    const activeSegments = Math.round((sessPercent / 100) * segments);
+                    const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)');
+                    for(let i=0; i<activeSegments; i++) {
+                        bgColors[i] = sessColor;
+                    }
+
+                    if (!dashSessChart) {
+                        dashSessChart = createSegmentedDoughnutChart(sessCtx, sessPercent, sessColor);
+                    } else {
+                        dashSessChart.data.datasets[0].backgroundColor = bgColors;
+                        dashSessChart.update();
+                    }
                 }
             } catch (error) {
                 console.error('Dashboard fetchBasic error:', error);
@@ -3537,6 +3535,293 @@ let historySortAsc = true;
         aiChatSendBtn.addEventListener('click', sendMessage);
         aiChatInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') sendMessage();
+        });
+    }
+
+// SQL 정합성/튜닝 Logic
+
+    const sqlTuningInput = document.getElementById('sqltuning-input');
+    const sqlTuningBtn = document.getElementById('sqltuning-run-btn');
+    const sqlTuningResult = document.getElementById('sqltuning-result');
+
+    if (sqlTuningInput && sqlTuningBtn && sqlTuningResult) {
+        const runSqlTuning = () => {
+            const text = sqlTuningInput.value.trim();
+            if (!text || sqlTuningBtn.disabled) return;
+
+            sqlTuningBtn.disabled = true;
+            sqlTuningResult.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);"><i data-lucide="loader-2" class="spinning"></i> 모델이 분석 중입니다 (최대 1분 정도 소요될 수 있습니다)...</div>';
+            if (typeof lucide !== 'undefined') lucide.createIcons({root: sqlTuningResult});
+
+            fetch(`/api/sqltuning/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: text })
+            })
+            .then(res => res.json())
+            .then(data => {
+                sqlTuningBtn.disabled = false;
+                if (data.success === false) {
+                    sqlTuningResult.innerHTML = `<div style="color: red;">${data.message || '분석 중 오류가 발생했습니다.'}</div>`;
+                    return;
+                }
+                const formatted = (data.answer || '').replace(/\n/g, '<br/>');
+                sqlTuningResult.innerHTML = `<div style="line-height: 1.6;">${formatted}</div>`;
+            })
+            .catch(() => {
+                sqlTuningBtn.disabled = false;
+                sqlTuningResult.innerHTML = '<div style="color: red;">서버 통신 오류가 발생했습니다. (SQL 튜닝 모델 서버가 켜져 있는지 확인하세요)</div>';
+            });
+        };
+
+        sqlTuningBtn.addEventListener('click', runSqlTuning);
+        sqlTuningInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runSqlTuning();
+        });
+    }
+
+    // 실행계획/실제 실행 통계 자동 조회 (관리자 전용)
+    const sqlTuningAccountSelect = document.getElementById('sqltuning-account-select');
+    const sqlTuningAutoBtn = document.getElementById('sqltuning-auto-btn');
+    const sqlTuningAutoActualBtn = document.getElementById('sqltuning-auto-actual-btn');
+    const sqlTuningBindPanel = document.getElementById('sqltuning-bind-panel');
+    const sqlTuningBindFields = document.getElementById('sqltuning-bind-fields');
+    const sqlTuningBindToggleBtn = document.getElementById('sqltuning-bind-toggle-btn');
+    const sqlTuningBindHashInput = document.getElementById('sqltuning-bind-hashvalue');
+    const sqlTuningBindCaptureBtn = document.getElementById('sqltuning-bind-capture-btn');
+    const sqlTuningBindCaptureStatus = document.getElementById('sqltuning-bind-capture-status');
+    const SQLTUNING_BIND_COLLAPSE_THRESHOLD = 6; // 이보다 많으면 기본 접힘 + 펼치기 버튼
+    let sqlTuningBindValues = {};
+    let sqlTuningBindExpanded = false;
+
+    // 쿼리에서 :1, :SID 같은 오라클 바인드 변수(콜론 표기, JDBC ? 아님)를 찾아 입력칸을 그려줌.
+    // 문자열 리터럴 안의 콜론은 매칭에서 제외.
+    function extractSqlTuningBindNames(query) {
+        const stripped = query.replace(/'([^']|'')*'/g, "''");
+        const re = /:([A-Za-z][A-Za-z0-9_$#]*|[0-9]+)/g;
+        const seen = new Set();
+        const names = [];
+        let m;
+        while ((m = re.exec(stripped)) !== null) {
+            if (!seen.has(m[1])) { seen.add(m[1]); names.push(m[1]); }
+        }
+        return names;
+    }
+
+    function renderBindField(name) {
+        const val = (sqlTuningBindValues[name] || '').replace(/"/g, '&quot;');
+        return `<label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; color: var(--text-secondary);">:${name}
+            <input type="text" data-bind-name="${name}" value="${val}" style="width: 140px; padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-main); color: var(--text-main); font-family: 'Consolas', 'D2Coding', monospace;">
+        </label>`;
+    }
+
+    window.renderSqlTuningBindFields = function () {
+        if (!sqlTuningBindPanel || !sqlTuningBindFields || !sqlTuningInput || !isAdmin()) return;
+        const names = extractSqlTuningBindNames(sqlTuningInput.value);
+        if (names.length === 0) {
+            sqlTuningBindPanel.style.display = 'none';
+            sqlTuningBindFields.innerHTML = '';
+            return;
+        }
+        sqlTuningBindPanel.style.display = 'flex';
+
+        const isCollapsible = names.length > SQLTUNING_BIND_COLLAPSE_THRESHOLD;
+        if (sqlTuningBindToggleBtn) {
+            sqlTuningBindToggleBtn.style.display = isCollapsible ? 'inline-block' : 'none';
+            sqlTuningBindToggleBtn.textContent = `바인드 변수 ${names.length}개 (${sqlTuningBindExpanded ? '접기 ▲' : '펼치기 ▼'})`;
+        }
+
+        if (isCollapsible && !sqlTuningBindExpanded) {
+            sqlTuningBindFields.style.display = 'none';
+            return;
+        }
+
+        sqlTuningBindFields.style.cssText = isCollapsible
+            ? 'display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; padding: 4px;'
+            : 'display: flex; flex-wrap: wrap; gap: 8px;';
+        sqlTuningBindFields.innerHTML = names.map(renderBindField).join('');
+        sqlTuningBindFields.querySelectorAll('input[data-bind-name]').forEach(inp => {
+            inp.addEventListener('input', () => {
+                sqlTuningBindValues[inp.dataset.bindName] = inp.value;
+            });
+        });
+    }
+
+    if (sqlTuningBindToggleBtn) {
+        sqlTuningBindToggleBtn.addEventListener('click', () => {
+            sqlTuningBindExpanded = !sqlTuningBindExpanded;
+            window.renderSqlTuningBindFields();
+        });
+    }
+
+    if (sqlTuningBindCaptureBtn && sqlTuningBindHashInput) {
+        sqlTuningBindCaptureBtn.addEventListener('click', async () => {
+            const hashValue = sqlTuningBindHashInput.value.trim();
+            if (!hashValue) return;
+            sqlTuningBindCaptureBtn.disabled = true;
+            if (sqlTuningBindCaptureStatus) sqlTuningBindCaptureStatus.textContent = '조회 중...';
+            try {
+                const res = await fetch('/api/sqltuning/bind_capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        db_id: window.currentDbId || '',
+                        account: sqlTuningAccountSelect ? sqlTuningAccountSelect.value : '',
+                        token: getToken(),
+                        hash_value: hashValue
+                    })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    if (sqlTuningBindCaptureStatus) sqlTuningBindCaptureStatus.textContent = data.message || '조회 실패';
+                    return;
+                }
+                Object.assign(sqlTuningBindValues, data.binds || {});
+                sqlTuningBindExpanded = true;
+                window.renderSqlTuningBindFields();
+                if (sqlTuningBindCaptureStatus) {
+                    sqlTuningBindCaptureStatus.textContent = `${Object.keys(data.binds || {}).length}개 값 채움`;
+                }
+            } catch (e) {
+                if (sqlTuningBindCaptureStatus) sqlTuningBindCaptureStatus.textContent = '서버 통신 오류';
+            } finally {
+                sqlTuningBindCaptureBtn.disabled = false;
+            }
+        });
+    }
+
+    if (sqlTuningInput) {
+        sqlTuningInput.addEventListener('input', window.renderSqlTuningBindFields);
+    }
+
+    window.loadSqlTuningAccounts = async function () {
+        if (!sqlTuningAccountSelect) return;
+        const dbId = window.currentDbId || '';
+        try {
+            const res = await fetch(`/api/query/accounts?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`);
+            const data = await res.json();
+            const accounts = data.accounts || [];
+            const previous = sqlTuningAccountSelect.value;
+            sqlTuningAccountSelect.innerHTML = accounts.map(a => `<option value="${a}">${a}</option>`).join('');
+            if (accounts.includes(previous)) {
+                sqlTuningAccountSelect.value = previous;
+            }
+        } catch (e) {
+            console.error('Failed to load SQL tuning accounts:', e);
+        }
+    };
+
+    function runSqlTuningAutoMode(btn, endpoint, loadingMsg, planLabel) {
+        const query = sqlTuningInput.value.trim();
+        if (!query || btn.disabled) return;
+
+        btn.disabled = true;
+        sqlTuningResult.innerHTML = `<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);"><i data-lucide="loader-2" class="spinning"></i> ${loadingMsg}</div>`;
+        if (typeof lucide !== 'undefined') lucide.createIcons({root: sqlTuningResult});
+
+        fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                db_id: window.currentDbId || '',
+                account: sqlTuningAccountSelect ? sqlTuningAccountSelect.value : '',
+                token: getToken(),
+                query: query,
+                binds: sqlTuningBindValues
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            btn.disabled = false;
+            if (data.success === false) {
+                sqlTuningResult.innerHTML = `<div style="color: red;">${data.message || '분석 중 오류가 발생했습니다.'}</div>`;
+                return;
+            }
+            const formatted = (data.answer || '').replace(/\n/g, '<br/>');
+            const planHtml = data.plan
+                ? `<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">[+] ${planLabel}</div><div style="display: none; font-size: 0.8rem; color: var(--text-muted); background: var(--bg-card); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; font-family: 'Consolas', 'D2Coding', monospace;">${data.plan}</div>`
+                : '';
+            sqlTuningResult.innerHTML = `<div style="line-height: 1.6;">${formatted}</div>${planHtml}`;
+        })
+        .catch(() => {
+            btn.disabled = false;
+            sqlTuningResult.innerHTML = '<div style="color: red;">서버 통신 오류가 발생했습니다.</div>';
+        });
+    }
+
+    if (sqlTuningAutoBtn && sqlTuningInput && sqlTuningResult) {
+        sqlTuningAutoBtn.addEventListener('click', () => runSqlTuningAutoMode(
+            sqlTuningAutoBtn, '/api/sqltuning/analyze_from_query',
+            '실행계획 조회 중... (이어서 모델 분석까지 최대 1분 정도 소요될 수 있습니다)',
+            '조회된 실행계획 원문 보기 (EXPLAIN PLAN, 추정치)'
+        ));
+    }
+
+    if (sqlTuningAutoActualBtn && sqlTuningInput && sqlTuningResult) {
+        sqlTuningAutoActualBtn.addEventListener('click', () => {
+            const query = sqlTuningInput.value.trim();
+            if (!query) return;
+            if (!confirm('이 쿼리를 실제로 실행합니다 (DISPLAY_CURSOR 실측 통계 조회). 계속할까요?')) return;
+            runSqlTuningAutoMode(
+                sqlTuningAutoActualBtn, '/api/sqltuning/analyze_from_query_actual',
+                '쿼리를 실제로 실행 중... (이어서 모델 분석까지 최대 1분 정도 소요될 수 있습니다)',
+                '조회된 실행계획 원문 보기 (DISPLAY_CURSOR, 실측치)'
+            );
+        });
+    }
+
+    // 1차 성능점검 - "실제 실행 통계로 분석"과 같은 실행계획/실측 통계를 얻지만 sLLM(FastAPI) 호출 없이
+    // 그대로 바로 보여줌 (AI 분석 전에 DBA가 눈으로 먼저 훑어보는 용도, 훨씬 빠름).
+    const sqlTuningQuickCheckBtn = document.getElementById('sqltuning-quickcheck-btn');
+    if (sqlTuningQuickCheckBtn && sqlTuningInput && sqlTuningResult) {
+        sqlTuningQuickCheckBtn.addEventListener('click', () => {
+            const query = sqlTuningInput.value.trim();
+            if (!query || sqlTuningQuickCheckBtn.disabled) return;
+            if (!confirm('이 쿼리를 실제로 실행합니다 (DISPLAY_CURSOR 실측 통계 조회, AI 분석 없음). 계속할까요?')) return;
+
+            sqlTuningQuickCheckBtn.disabled = true;
+            sqlTuningResult.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);"><i data-lucide="loader-2" class="spinning"></i> 쿼리를 실제로 실행 중...</div>';
+            if (typeof lucide !== 'undefined') lucide.createIcons({root: sqlTuningResult});
+
+            fetch('/api/sqltuning/quick_check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    db_id: window.currentDbId || '',
+                    account: sqlTuningAccountSelect ? sqlTuningAccountSelect.value : '',
+                    token: getToken(),
+                    query: query,
+                    binds: sqlTuningBindValues
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                sqlTuningQuickCheckBtn.disabled = false;
+                if (data.success === false) {
+                    sqlTuningResult.innerHTML = `<div style="color: red;">${data.message || '점검 중 오류가 발생했습니다.'}</div>`;
+                    return;
+                }
+                sqlTuningResult.innerHTML = `<div style="font-size: 0.85rem; color: var(--text-muted); background: var(--bg-card); padding: 12px; border-radius: 4px; white-space: pre-wrap; font-family: 'Consolas', 'D2Coding', monospace;">${data.plan}</div>`;
+            })
+            .catch(() => {
+                sqlTuningQuickCheckBtn.disabled = false;
+                sqlTuningResult.innerHTML = '<div style="color: red;">서버 통신 오류가 발생했습니다.</div>';
+            });
+        });
+    }
+
+    // 화면 클리어 - 쿼리 입력, 바인드 변수, 결과 영역을 전부 초기 상태로 되돌림
+    const sqlTuningClearBtn = document.getElementById('sqltuning-clear-btn');
+    if (sqlTuningClearBtn && sqlTuningInput && sqlTuningResult) {
+        sqlTuningClearBtn.addEventListener('click', () => {
+            sqlTuningInput.value = '';
+            sqlTuningBindValues = {};
+            sqlTuningBindExpanded = false;
+            if (sqlTuningBindHashInput) sqlTuningBindHashInput.value = '';
+            if (sqlTuningBindCaptureStatus) sqlTuningBindCaptureStatus.textContent = '';
+            window.renderSqlTuningBindFields();
+            sqlTuningResult.innerHTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 30px;">쿼리/실행계획을 입력하고 분석 실행 버튼을 누르세요.</div>';
+            sqlTuningInput.focus();
         });
     }
 
