@@ -1,4 +1,24 @@
 
+// --- Theme Logic ---
+// Applied at script-load time (not inside DOMContentLoaded) so the correct theme paints as early as
+// possible instead of flashing the default dark theme first.
+(function applySavedTheme() {
+    const saved = localStorage.getItem('dbagent_theme') || 'dark';
+    if (saved === 'light') document.documentElement.setAttribute('data-theme', 'light');
+})();
+
+function isLightTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'light';
+}
+
+// Chart.js configs below hardcode axis/grid colors as shades of white for the dark theme; this
+// returns the equivalent shade of near-black when the light theme is active instead, so text/grid
+// lines stay legible against the now-light chart background. Only for chart chrome (ticks/grid/
+// borders/titles), not series colors (those stay theme-neutral).
+function chartLineColor(alpha) {
+    return isLightTheme() ? `rgba(15, 23, 42, ${alpha})` : `rgba(255, 255, 255, ${alpha})`;
+}
+
 // --- Auth Logic ---
 const API_BASE_AUTH = `/api`;
 
@@ -107,6 +127,25 @@ function getToken() {
             location.reload();
         });
         
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        const applyThemeIcon = () => {
+            if (!themeToggleBtn) return;
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            themeToggleBtn.querySelector('i').setAttribute('data-lucide', isLight ? 'moon' : 'sun');
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+        };
+        applyThemeIcon();
+        themeToggleBtn?.addEventListener('click', () => {
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            localStorage.setItem('dbagent_theme', isLight ? 'dark' : 'light');
+            // Full reload rather than an in-place toggle: several Chart.js instances (session trend,
+            // scatter, AWR history) bake their axis/grid colors into options at creation time via
+            // chartLineColor() and only get touched again through .update() on data, not on theme
+            // change - a reload is the simplest way to guarantee every chart repaints with the new
+            // theme's colors instead of tracking down and re-applying options on each instance.
+            location.reload();
+        });
+
         const pwdModal = document.getElementById('change-pwd-modal');
         document.getElementById('change-pwd-trigger')?.addEventListener('click', () => {
             pwdModal.style.display = 'flex';
@@ -1702,15 +1741,15 @@ let layoutHTML = "";
                                     },
                                     min: nowTime - (5 * 60 * 1000),
                                     max: nowTime,
-                                    ticks: { color: 'rgba(255, 255, 255, 0.8)' },
+                                    ticks: { color: chartLineColor(0.8) },
                                     grid: { 
                                         drawOnChartArea: true,
-                                        color: 'rgba(255, 255, 255, 0.15)',
+                                        color: chartLineColor(0.15),
                                         borderDash: [4, 4]
                                     },
                                     border: {
                                         display: true,
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         width: 2
                                     }
                                 },
@@ -1718,15 +1757,15 @@ let layoutHTML = "";
                                     beginAtZero: true,
                                     min: 0,
                                     max: 120,
-                                    ticks: { stepSize: 20, color: 'rgba(255, 255, 255, 0.8)' },
+                                    ticks: { stepSize: 20, color: chartLineColor(0.8) },
                                     grid: { 
                                         drawOnChartArea: true,
-                                        color: 'rgba(255, 255, 255, 0.15)',
+                                        color: chartLineColor(0.15),
                                         borderDash: [4, 4]
                                     },
                                     border: {
                                         display: true,
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         width: 2
                                     }
                                 }
@@ -1743,7 +1782,7 @@ let layoutHTML = "";
                                     display: true,
                                     text: 'Session Count',
                                     align: 'start',
-                                    color: 'rgba(255, 255, 255, 0.8)',
+                                    color: chartLineColor(0.8),
                                     padding: { bottom: 10 }
                                 }
                             }
@@ -1802,11 +1841,11 @@ let layoutHTML = "";
                                     position: 'bottom',
                                     border: {
                                         display: true,
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         width: 1
                                     },
                                     ticks: {
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         maxRotation: 0,
                                         callback: function(value) {
                                             const d = new Date(value);
@@ -1816,9 +1855,9 @@ let layoutHTML = "";
                                         }
                                     },
                                     grid: { 
-                                        color: 'rgba(255, 255, 255, 0.1)',
-                                        borderColor: 'rgba(255, 255, 255, 1)',
-                                        tickColor: 'rgba(255, 255, 255, 1)'
+                                        color: chartLineColor(0.1),
+                                        borderColor: chartLineColor(1),
+                                        tickColor: chartLineColor(1)
                                     },
                                     title: { display: false }
                                 },
@@ -1828,20 +1867,20 @@ let layoutHTML = "";
                                     max: 300,
                                     border: {
                                         display: true,
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         width: 1
                                     },
                                     ticks: {
-                                        color: 'rgba(255, 255, 255, 1)',
+                                        color: chartLineColor(1),
                                         stepSize: 100,
                                         callback: function(value) {
                                             return value;
                                         }
                                     },
                                     grid: { 
-                                        color: 'rgba(255, 255, 255, 0.1)',
-                                        borderColor: 'rgba(255, 255, 255, 1)',
-                                        tickColor: 'rgba(255, 255, 255, 1)'
+                                        color: chartLineColor(0.1),
+                                        borderColor: chartLineColor(1),
+                                        tickColor: chartLineColor(1)
                                     }
                                 }
                             },
@@ -1850,7 +1889,7 @@ let layoutHTML = "";
                                     display: true,
                                     text: 'Trace(sec)',
                                     align: 'start',
-                                    color: 'rgba(255, 255, 255, 0.7)',
+                                    color: chartLineColor(0.7),
                                     font: { size: 12, weight: 'bold' },
                                     padding: { top: 0, bottom: 5 }
                                 },
@@ -1886,7 +1925,7 @@ let layoutHTML = "";
                     const statusClass = 'online';
                     const durationVal = session.duration_time !== null ? Number(session.duration_time) : 0;
                     const durationPct = Math.min((durationVal / maxDuration) * 100, 100);
-                    const durationHtml = session.duration_time !== null ? `<div style="display: flex; align-items: center; gap: 8px;"><div style="flex-grow: 1; background-color: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden; width: 60px;"><div style="width: ${durationPct}%; height: 100%; background-color: #3498db; border-radius: 4px;"></div></div><span style="min-width: 30px; text-align: right;">${durationVal}</span></div>` : '-';
+                    const durationHtml = session.duration_time !== null ? `<div style="display: flex; align-items: center; gap: 8px;"><div style="flex-grow: 1; background-color: var(--track-bg); height: 8px; border-radius: 4px; overflow: hidden; width: 60px;"><div style="width: ${durationPct}%; height: 100%; background-color: #3498db; border-radius: 4px;"></div></div><span style="min-width: 30px; text-align: right;">${durationVal}</span></div>` : '-';
                     html += `
                         <tr class="clickable-session-row" style="cursor:pointer;" data-sid="${session.sid}" data-sql_id="${session.sql_id || ''}">
                             <td style="text-align:center;" onclick="event.stopPropagation();"><input type="checkbox" class="session-checkbox" data-sid="${session.sid}" data-serial="${session.serial}"></td>
@@ -1901,7 +1940,7 @@ let layoutHTML = "";
                                 if (session.session_wait_pct && session.session_wait_pct.includes(',')) {
                                     const [cpu, uio, sio, other] = session.session_wait_pct.split(',').map(Number);
                                     if (cpu + uio + sio + other > 0) {
-                                        waitHtml = `<div style="display: flex; width: 100px; height: 12px; border-radius: 6px; overflow: hidden; background-color: var(--border-color);" title="CPU: ${cpu}%, User I/O: ${uio}%, Sys I/O: ${sio}%, Other: ${other}%"><div style="width: ${cpu}%; background-color: #9b59b6;" title="CPU: ${cpu}%"></div><div style="width: ${uio}%; background-color: #2ecc71;" title="User I/O: ${uio}%"></div><div style="width: ${sio}%; background-color: #e67e22;" title="Sys I/O: ${sio}%"></div><div style="width: ${other}%; background-color: #95a5a6;" title="Other: ${other}%"></div></div>`;
+                                        waitHtml = `<div style="display: flex; width: 100px; height: 12px; border-radius: 6px; overflow: hidden; background-color: var(--track-bg);" title="CPU: ${cpu}%, User I/O: ${uio}%, Sys I/O: ${sio}%, Other: ${other}%"><div style="width: ${cpu}%; background-color: #9b59b6;" title="CPU: ${cpu}%"></div><div style="width: ${uio}%; background-color: #2ecc71;" title="User I/O: ${uio}%"></div><div style="width: ${sio}%; background-color: #e67e22;" title="Sys I/O: ${sio}%"></div><div style="width: ${other}%; background-color: var(--text-muted);" title="Other: ${other}%"></div></div>`;
                                     }
                                 }
                                 return waitHtml;
@@ -1994,7 +2033,7 @@ let layoutHTML = "";
     function createSegmentedDoughnutChart(ctx, value, activeColor) {
         const segments = 10;
         const dataArr = Array(segments).fill(1);
-        const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)'); // Faint white outline for off segments
+        const bgColors = Array(segments).fill(chartLineColor(0.1)); // Faint white outline for off segments
         
         const activeSegments = Math.round((value / 100) * segments);
         for(let i=0; i<activeSegments; i++) {
@@ -2037,6 +2076,15 @@ let layoutHTML = "";
     // Defined at this shared scope (not inside fetchDashboard) so the DB-switch click handler can
     // also call them directly, wiping stale widgets the instant a new DB is selected rather than
     // waiting on any in-flight fetch to resolve.
+    // Clears a segmented doughnut chart back to the "no data" look (all segments faint) instead of
+    // leaving the previous DB's colored segments on screen until the next fetch resolves.
+    const clearSegmentedDoughnutChart = (chart) => {
+        if (!chart) return;
+        const segments = chart.data.datasets[0].backgroundColor.length;
+        chart.data.datasets[0].backgroundColor = Array(segments).fill(chartLineColor(0.1));
+        chart.update();
+    };
+
     const resetBasic = () => {
         const dashCpuVal = document.getElementById('dash-cpu-val');
         const dashMemVal = document.getElementById('dash-mem-val');
@@ -2044,6 +2092,20 @@ let layoutHTML = "";
         if (dashCpuVal) { dashCpuVal.innerText = '-'; dashCpuVal.style.color = 'var(--text-main)'; }
         if (dashMemVal) { dashMemVal.innerText = '-'; dashMemVal.style.color = 'var(--text-main)'; }
         if (dashSessVal) dashSessVal.innerText = '-';
+        clearSegmentedDoughnutChart(dashCpuChart);
+        clearSegmentedDoughnutChart(dashMemChart);
+        clearSegmentedDoughnutChart(dashSessChart);
+    };
+
+    const resetFailIndicator = () => {
+        const failVal = document.getElementById('dash-fail-val');
+        const failCountLabel = document.getElementById('dash-fail-count');
+        if (failVal) failVal.textContent = '-';
+        if (failCountLabel) failCountLabel.textContent = '';
+        document.body.classList.remove('alert-blink');
+        const incidentBtn = document.getElementById('dash-incident-action-btn');
+        if (incidentBtn) incidentBtn.style.display = 'none';
+        clearSegmentedDoughnutChart(dashFailChart);
     };
 
     const resetHealth = () => {
@@ -2078,6 +2140,7 @@ let layoutHTML = "";
     function resetAllDashboardWidgets() {
         resetBasic();
         resetHealth();
+        resetFailIndicator();
         resetSessionData('접속 중...');
         resetEvents('접속 중...');
     }
@@ -2145,7 +2208,7 @@ let layoutHTML = "";
                     
                     const segments = 10;
                     const activeSegments = Math.round((data.cpu / 100) * segments);
-                    const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)');
+                    const bgColors = Array(segments).fill(chartLineColor(0.1));
                     for(let i=0; i<activeSegments; i++) {
                         bgColors[i] = cpuColor;
                     }
@@ -2164,7 +2227,7 @@ let layoutHTML = "";
                     
                     const segments = 10;
                     const activeSegments = Math.round((data.memory / 100) * segments);
-                    const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)');
+                    const bgColors = Array(segments).fill(chartLineColor(0.1));
                     for(let i=0; i<activeSegments; i++) {
                         bgColors[i] = memColor;
                     }
@@ -2186,7 +2249,7 @@ let layoutHTML = "";
 
                     const segments = 10;
                     const activeSegments = Math.round((sessPercent / 100) * segments);
-                    const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)');
+                    const bgColors = Array(segments).fill(chartLineColor(0.1));
                     for(let i=0; i<activeSegments; i++) {
                         bgColors[i] = sessColor;
                     }
@@ -2335,7 +2398,7 @@ let layoutHTML = "";
                     
                     const segments = 10;
                     const activeSegments = Math.round((percentage / 100) * segments);
-                    const bgColors = Array(segments).fill('rgba(255, 255, 255, 0.1)');
+                    const bgColors = Array(segments).fill(chartLineColor(0.1));
                     for(let i=0; i<activeSegments; i++) bgColors[i] = failColor;
                     
                     if (!dashFailChart) {
@@ -2374,7 +2437,7 @@ let layoutHTML = "";
                                 activeSess.forEach(s => {
                                     const durationVal = s.duration_time !== null ? Number(s.duration_time) : 0;
                                     const durationPct = Math.min((durationVal / maxDuration) * 100, 100);
-                                    const durationHtml = s.duration_time !== null ? `<div style="display: flex; align-items: center; gap: 8px;"><div style="flex-grow: 1; background-color: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden; width: 60px;"><div style="width: ${durationPct}%; height: 100%; background-color: #3498db; border-radius: 4px;"></div></div><span style="min-width: 30px; text-align: right;">${durationVal}</span></div>` : '-';
+                                    const durationHtml = s.duration_time !== null ? `<div style="display: flex; align-items: center; gap: 8px;"><div style="flex-grow: 1; background-color: var(--track-bg); height: 8px; border-radius: 4px; overflow: hidden; width: 60px;"><div style="width: ${durationPct}%; height: 100%; background-color: #3498db; border-radius: 4px;"></div></div><span style="min-width: 30px; text-align: right;">${durationVal}</span></div>` : '-';
                                     html += `<tr class="clickable-session-row" style="cursor:pointer;" data-sid="${s.sid}" data-sql_id="${s.sql_id || ''}">
                                         <td style="text-align:center;" onclick="event.stopPropagation();"><input type="checkbox" class="dash-sess-checkbox" data-sid="${s.sid}" data-serial="${s.serial}"></td>
                                         <td>${s.db_name || '-'}</td>
@@ -2388,7 +2451,7 @@ let layoutHTML = "";
                                             if (s.session_wait_pct && s.session_wait_pct.includes(',')) {
                                                 const [cpu, uio, sio, other] = s.session_wait_pct.split(',').map(Number);
                                                 if (cpu + uio + sio + other > 0) {
-                                                    waitHtml = `<div style="display: flex; width: 100px; height: 12px; border-radius: 6px; overflow: hidden; background-color: var(--border-color);" title="CPU: ${cpu}%, User I/O: ${uio}%, Sys I/O: ${sio}%, Other: ${other}%"><div style="width: ${cpu}%; background-color: #9b59b6;" title="CPU: ${cpu}%"></div><div style="width: ${uio}%; background-color: #2ecc71;" title="User I/O: ${uio}%"></div><div style="width: ${sio}%; background-color: #e67e22;" title="Sys I/O: ${sio}%"></div><div style="width: ${other}%; background-color: #95a5a6;" title="Other: ${other}%"></div></div>`;
+                                                    waitHtml = `<div style="display: flex; width: 100px; height: 12px; border-radius: 6px; overflow: hidden; background-color: var(--track-bg);" title="CPU: ${cpu}%, User I/O: ${uio}%, Sys I/O: ${sio}%, Other: ${other}%"><div style="width: ${cpu}%; background-color: #9b59b6;" title="CPU: ${cpu}%"></div><div style="width: ${uio}%; background-color: #2ecc71;" title="User I/O: ${uio}%"></div><div style="width: ${sio}%; background-color: #e67e22;" title="Sys I/O: ${sio}%"></div><div style="width: ${other}%; background-color: var(--text-muted);" title="Other: ${other}%"></div></div>`;
                                                 }
                                             }
                                             return waitHtml;
@@ -3176,12 +3239,12 @@ function updateHistoryUI(data) {
                             tooltipFormat: 'yyyy-MM-dd HH:mm:ss'
                         },
                         title: { display: true, text: 'Sample Time' },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        grid: { color: chartLineColor(0.05) }
                     },
                     y: {
                         beginAtZero: true,
                         title: { display: true, text: 'Duration (sec)' },
-                        grid: { color: 'rgba(255,255,255,0.05)' }
+                        grid: { color: chartLineColor(0.05) }
                     }
                 },
                 plugins: {
@@ -3544,6 +3607,17 @@ let historySortAsc = true;
     const sqlTuningBtn = document.getElementById('sqltuning-run-btn');
     const sqlTuningResult = document.getElementById('sqltuning-result');
 
+    // 모델 답변에 줄바꿈(\n)이 있으면 그대로 쓰고, 하나도 없이 한 문단으로 쭉 이어진 경우엔
+    // 문장이 끝나는 마침표 뒤마다 줄바꿈을 넣어 가독성을 보완한다. 숫자 뒤 마침표(번호 목록
+    // "1. ..." 이나 소수점 "2.5")는 문장 끝이 아니므로 lookbehind로 제외.
+    function formatSqlTuningAnswer(text) {
+        if (!text) return '';
+        if (text.indexOf('\n') !== -1) {
+            return text.replace(/\n/g, '<br/>');
+        }
+        return text.replace(/(?<!\d)\.\s+/g, '.<br/><br/>');
+    }
+
     if (sqlTuningInput && sqlTuningBtn && sqlTuningResult) {
         const runSqlTuning = () => {
             const text = sqlTuningInput.value.trim();
@@ -3565,7 +3639,7 @@ let historySortAsc = true;
                     sqlTuningResult.innerHTML = `<div style="color: red;">${data.message || '분석 중 오류가 발생했습니다.'}</div>`;
                     return;
                 }
-                const formatted = (data.answer || '').replace(/\n/g, '<br/>');
+                const formatted = formatSqlTuningAnswer(data.answer);
                 sqlTuningResult.innerHTML = `<div style="line-height: 1.6;">${formatted}</div>`;
             })
             .catch(() => {
@@ -3737,7 +3811,7 @@ let historySortAsc = true;
                 sqlTuningResult.innerHTML = `<div style="color: red;">${data.message || '분석 중 오류가 발생했습니다.'}</div>`;
                 return;
             }
-            const formatted = (data.answer || '').replace(/\n/g, '<br/>');
+            const formatted = formatSqlTuningAnswer(data.answer);
             const planHtml = data.plan
                 ? `<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">[+] ${planLabel}</div><div style="display: none; font-size: 0.8rem; color: var(--text-muted); background: var(--bg-card); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; font-family: 'Consolas', 'D2Coding', monospace;">${data.plan}</div>`
                 : '';
