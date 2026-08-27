@@ -8,37 +8,35 @@
 
  :: Spring Boot ::                (v3.3.5)
 
-2026-08-27T15:58:35.846+09:00  INFO 3168 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 3168 (C:\AI-PROJECTS\DBAgent-Java\target\dbagent-java-0.1.0.jar started by À±ÀÎ¼ö in C:\AI-PROJECTS\DBAgent-Java)
-2026-08-27T15:58:35.850+09:00  INFO 3168 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
-2026-08-27T15:58:37.011+09:00  INFO 3168 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
-2026-08-27T15:58:37.022+09:00  INFO 3168 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-08-27T15:58:37.022+09:00  INFO 3168 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
-2026-08-27T15:58:37.066+09:00  INFO 3168 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-08-27T15:58:37.068+09:00  INFO 3168 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1168 ms
-2026-08-27T15:58:37.329+09:00  INFO 3168 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-08-27T15:58:37.621+09:00  INFO 3168 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@6968c1d6
-2026-08-27T15:58:37.624+09:00  INFO 3168 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-08-27T15:58:37.745+09:00  INFO 3168 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
-2026-08-27T15:58:38.015+09:00  INFO 3168 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8006 (http) with context path '/'
-2026-08-27T15:58:38.024+09:00  INFO 3168 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 2.633 seconds (process running for 3.12)
-2026-08-27T15:58:43.277+09:00  INFO 3168 --- [nio-8006-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-08-27T15:58:43.279+09:00  INFO 3168 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-08-27T15:58:43.282+09:00  INFO 3168 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-2026-08-27T15:59:59.228+09:00  INFO 3168 --- [onPool-worker-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Starting...
-2026-08-27T15:59:59.228+09:00  INFO 3168 --- [onPool-worker-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Starting...
-2026-08-27T15:59:59.228+09:00  INFO 3168 --- [onPool-worker-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Starting...
-2026-08-27T15:59:59.228+09:00  INFO 3168 --- [onPool-worker-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Starting...
-2026-08-27T15:59:59.229+09:00  INFO 3168 --- [onPool-worker-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Starting...
-2026-08-27T15:59:59.229+09:00  INFO 3168 --- [onPool-worker-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Starting...
-2026-08-27T15:59:59.231+09:00  INFO 3168 --- [onPool-worker-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Start completed.
-2026-08-27T15:59:59.228+09:00  INFO 3168 --- [onPool-worker-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Starting...
-2026-08-27T15:59:59.229+09:00  INFO 3168 --- [onPool-worker-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Starting...
-2026-08-27T15:59:59.230+09:00  INFO 3168 --- [onPool-worker-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Start completed.
-2026-08-27T15:59:59.231+09:00  INFO 3168 --- [onPool-worker-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Start completed.
-2026-08-27T15:59:59.231+09:00  INFO 3168 --- [onPool-worker-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Start completed.
-2026-08-27T15:59:59.231+09:00  INFO 3168 --- [onPool-worker-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Start completed.
-2026-08-27T15:59:59.232+09:00  INFO 3168 --- [onPool-worker-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Start completed.
-2026-08-27T15:59:59.232+09:00  INFO 3168 --- [onPool-worker-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Start completed.
-2026-08-27T15:59:59.233+09:00  INFO 3168 --- [onPool-worker-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Start completed.
-2026-08-27T16:00:05.519+09:00  INFO 3168 --- [nio-8006-exec-6] com.zaxxer.hikari.HikariDataSource       : oracle-default - Starting...
-2026-08-27T16:00:05.521+09:00  INFO 3168 --- [nio-8006-exec-6] com.zaxxer.hikari.HikariDataSource       : oracle-default - Start completed.
+2026-08-27T17:03:47.043+09:00  INFO 29344 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 29344 (C:\AI-PROJECTS\DBAgent-Java\target\dbagent-java-0.1.0.jar started by À±ÀÎ¼ö in C:\AI-PROJECTS\DBAgent-Java)
+2026-08-27T17:03:47.045+09:00  INFO 29344 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-08-27T17:03:48.184+09:00  INFO 29344 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
+2026-08-27T17:03:48.199+09:00  INFO 29344 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-08-27T17:03:48.199+09:00  INFO 29344 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
+2026-08-27T17:03:48.240+09:00  INFO 29344 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-08-27T17:03:48.242+09:00  INFO 29344 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1148 ms
+2026-08-27T17:03:48.573+09:00  INFO 29344 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-08-27T17:03:48.823+09:00  INFO 29344 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@798dad3d
+2026-08-27T17:03:48.825+09:00  INFO 29344 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-08-27T17:03:48.934+09:00  INFO 29344 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-08-27T17:03:49.607+09:00  INFO 29344 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8006 (http) with context path '/'
+2026-08-27T17:03:49.613+09:00  INFO 29344 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 2.938 seconds (process running for 3.289)
+2026-08-27T17:03:55.083+09:00  INFO 29344 --- [nio-8006-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-08-27T17:03:55.084+09:00  INFO 29344 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-08-27T17:03:55.085+09:00  INFO 29344 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-08-27T17:06:41.304+09:00  INFO 29344 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Starting...
+2026-08-27T17:06:41.304+09:00  INFO 29344 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Starting...
+2026-08-27T17:06:41.304+09:00  INFO 29344 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Starting...
+2026-08-27T17:06:41.304+09:00  INFO 29344 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Starting...
+2026-08-27T17:06:41.304+09:00  INFO 29344 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Starting...
+2026-08-27T17:06:41.305+09:00  INFO 29344 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Starting...
+2026-08-27T17:06:41.307+09:00  INFO 29344 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Start completed.
+2026-08-27T17:06:41.307+09:00  INFO 29344 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Start completed.
+2026-08-27T17:06:41.305+09:00  INFO 29344 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Start completed.
+2026-08-27T17:06:41.305+09:00  INFO 29344 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Start completed.
+2026-08-27T17:06:41.306+09:00  INFO 29344 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Start completed.
+2026-08-27T17:06:41.306+09:00  INFO 29344 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Start completed.
+2026-08-27T17:06:41.306+09:00  INFO 29344 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Starting...
+2026-08-27T17:06:41.307+09:00  INFO 29344 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Starting...
+2026-08-27T17:06:41.311+09:00  INFO 29344 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Start completed.
+2026-08-27T17:06:41.312+09:00  INFO 29344 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Start completed.

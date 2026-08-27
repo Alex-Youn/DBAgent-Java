@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @RestController
@@ -110,9 +112,16 @@ public class MonitorController {
         }
     }
 
-    // Fleet Overview prototype (fleet-overview-test-blue.html): one status snapshot per configured
-    // instance. Checked concurrently, not in a loop - a single down/slow DB would otherwise stall
-    // every instance queued after it. Respects the same per-account DB visibility as everywhere else
+    // Not the default ForkJoinPool.commonPool() - its parallelism defaults to (CPU cores - 1), which
+    // on a modest server can be far smaller than the number of configured DB instances, so most
+    // instances would queue behind each other instead of actually running concurrently (사용자
+    // 피드백: 11개 DB 조회가 너무 느림). Cached so it costs nothing when idle and scales with however
+    // many instances/concurrent requests actually show up.
+    private static final ExecutorService FLEET_STATUS_EXECUTOR = Executors.newCachedThreadPool();
+
+    // Fleet Overview (fleet-overview-test-blue.html): one status snapshot per configured instance.
+    // Checked concurrently, not in a loop - a single down/slow DB would otherwise stall every
+    // instance queued after it. Respects the same per-account DB visibility as everywhere else
     // (canAccessDb) - an instance the caller can't see just doesn't appear in the response, same as
     // it wouldn't in the sidebar.
     @GetMapping("/fleet_status")
@@ -122,7 +131,7 @@ public class MonitorController {
         }
         List<CompletableFuture<Map<String, Object>>> futures = configService.listAllInstances().stream()
                 .filter(inst -> authService.canAccessDb(token, inst.id()))
-                .map(inst -> CompletableFuture.supplyAsync(() -> monitorService.getFleetStatus(inst)))
+                .map(inst -> CompletableFuture.supplyAsync(() -> monitorService.getFleetStatus(inst), FLEET_STATUS_EXECUTOR))
                 .collect(Collectors.toList());
         List<Map<String, Object>> results = new ArrayList<>(futures.size());
         for (CompletableFuture<Map<String, Object>> f : futures) {

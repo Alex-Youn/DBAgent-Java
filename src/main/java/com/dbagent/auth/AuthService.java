@@ -32,6 +32,13 @@ public class AuthService {
     @PostConstruct
     void init() {
         jdbc.execute("CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, token TEXT)");
+        // Sessions used to live as a single `token` column on users - one login silently invalidated
+        // any other device/browser already logged into that account (사용자 피드백: 같은 계정으로 두
+        // DBA가 동시에 쓰면 서로 세션을 끊어버림). Moved to its own table so a username can have any
+        // number of concurrently valid tokens; the old users.token column is left in place unused
+        // rather than dropped (SQLite ALTER TABLE DROP COLUMN support is version-dependent, and there's
+        // nothing left reading it).
+        jdbc.execute("CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL)");
 
         List<String> existingColumns = jdbc.query("PRAGMA table_info(users)",
                 (rs, rowNum) -> rs.getString("name"));
@@ -62,7 +69,7 @@ public class AuthService {
         }
 
         // Reset every session on server restart, same as the Python init_db().
-        jdbc.update("UPDATE users SET token = NULL");
+        jdbc.update("DELETE FROM sessions");
 
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE username = ?", Integer.class, "admin");
         if (count == null || count == 0) {
@@ -85,7 +92,7 @@ public class AuthService {
             return Optional.empty();
         }
         String token = HexFormat.of().formatHex(randomBytes(32));
-        jdbc.update("UPDATE users SET token = ? WHERE username = ?", token, username);
+        jdbc.update("INSERT INTO sessions (token, username) VALUES (?, ?)", token, username);
         return Optional.of(new AuthSession(username, (String) row.get("role"),
                 parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
                 isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
@@ -94,13 +101,19 @@ public class AuthService {
     public Optional<AuthSession> sessionForToken(String token) {
         try {
             Map<String, Object> row = jdbc.queryForMap(
-                    "SELECT username, role, hidden_menus, hidden_dbs, fleet_overview, fleet_overview_auto_redirect FROM users WHERE token = ?", token);
+                    "SELECT u.username, u.role, u.hidden_menus, u.hidden_dbs, u.fleet_overview, u.fleet_overview_auto_redirect " +
+                            "FROM sessions s JOIN users u ON u.username = s.username WHERE s.token = ?", token);
             return Optional.of(new AuthSession((String) row.get("username"), (String) row.get("role"),
                     parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
                     isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
+    }
+
+    /** Invalidates just this one token/device - other concurrent sessions for the same account are untouched. */
+    public void logout(String token) {
+        jdbc.update("DELETE FROM sessions WHERE token = ?", token);
     }
 
     public boolean isAdmin(String token) {
@@ -209,11 +222,12 @@ public class AuthService {
         if (updated == 0) {
             return Map.of("success", false, "message", "존재하지 않는 계정입니다.");
         }
+        jdbc.update("DELETE FROM sessions WHERE username = ?", username);
         return Map.of("success", true);
     }
 
     public boolean changePassword(String token, String currentPassword, String newPassword) {
-        var row = jdbc.query("SELECT username, password FROM users WHERE token = ?",
+        var row = jdbc.query("SELECT u.username, u.password FROM sessions s JOIN users u ON u.username = s.username WHERE s.token = ?",
                 (rs, rowNum) -> new String[]{rs.getString("username"), rs.getString("password")}, token);
         if (row.isEmpty()) {
             return false;
