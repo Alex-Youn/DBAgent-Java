@@ -13,11 +13,9 @@
           "password": "B64(ZGJhZ2VudDAx)",
           "pool_min_idle": null,
           "pool_max_size": null,
+          "session_thresholds": [80, 90, 100, 110, 120],
           "accounts": [
-            {
-              "user": "apdba",
-              "password": "B64(YXBkYmE=)"
-            }
+            {"user": "apdba", "password": "B64(YXBkYmE=)"}
           ]
         },
         {

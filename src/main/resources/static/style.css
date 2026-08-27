@@ -74,7 +74,11 @@ body {
 
 .app-container {
     display: flex;
-    height: 100vh;
+    /* zoom: 90% is applied inline on this element (index.html) to fit more content on screen; zoom
+       shrinks the rendered box by that factor, so a plain 100vh here would only cover 90% of the
+       actual viewport height, leaving a blank strip at the bottom. Scale the height up to compensate
+       so the zoomed-out box still fills the full viewport. */
+    height: calc(100vh / 0.9);
 }
 
 /* Sidebar */
@@ -285,7 +289,7 @@ body {
 }
 
 .content-area {
-    padding: 32px;
+    padding: 32px 32px calc(32px + 1cm) 32px;
 }
 
 /* Sections */

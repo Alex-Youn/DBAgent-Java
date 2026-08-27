@@ -91,7 +91,10 @@ public class ExecutionPlanService {
      */
     public String explainActual(TargetDbConfig target, String rawQuery, Map<String, String> bindValues) throws SQLException {
         String query = stripTrailingSemicolon(rawQuery.strip());
-        String upper = query.stripLeading().toUpperCase(Locale.ROOT);
+        // Classification only strips leading comments/whitespace (e.g. a "-- 설명" line DBAs often
+        // put above a query) - the comments stay in the actual query text sent to Oracle below,
+        // where they're harmless.
+        String upper = stripLeadingComments(query).toUpperCase(Locale.ROOT);
         if (!(upper.startsWith("SELECT") || upper.startsWith("WITH"))) {
             throw new SQLException("실제 실행 통계 분석은 SELECT/WITH 조회 쿼리만 지원합니다 (데이터 변경 방지).");
         }
@@ -242,5 +245,16 @@ public class ExecutionPlanService {
 
     private String stripTrailingSemicolon(String sql) {
         return sql.endsWith(";") ? sql.substring(0, sql.length() - 1).stripTrailing() : sql;
+    }
+
+    // Leading whitespace and comments (line "-- ..." or block "/* ... */") before the actual
+    // statement - DBAs commonly put an explanatory comment line above the query itself, which would
+    // otherwise make the SELECT/WITH-only check below reject a perfectly valid SELECT.
+    private static final Pattern LEADING_COMMENT_PATTERN =
+            Pattern.compile("\\A(?:\\s|--[^\\r\\n]*|/\\*.*?\\*/)+", Pattern.DOTALL);
+
+    private static String stripLeadingComments(String sql) {
+        Matcher m = LEADING_COMMENT_PATTERN.matcher(sql);
+        return m.find() ? sql.substring(m.end()) : sql;
     }
 }
