@@ -1,6 +1,9 @@
 
-jdk17/
-*.jar
+/jdk17/
+/maven39/bin/
+/maven39/boot/*.jar
+/maven39/lib/*.jar
+/target/*.jar
+/dist/*.jar
 .gradle/
 build/
-bin/
