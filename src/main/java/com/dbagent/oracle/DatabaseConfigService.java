@@ -102,6 +102,19 @@ public class DatabaseConfigService {
         return users;
     }
 
+    /** Every configured instance across all groups - used for fleet-wide bulk status checks. */
+    public List<TargetDbConfig> listAllInstances() {
+        List<TargetDbConfig> result = new ArrayList<>();
+        if (config != null && config.has("groups")) {
+            for (JsonNode group : config.get("groups")) {
+                for (JsonNode inst : group.path("instances")) {
+                    result.add(fromInstance(inst));
+                }
+            }
+        }
+        return result;
+    }
+
     private JsonNode findInstance(String dbId) {
         // Defensive: a request with a duplicated db_id query param (?db_id=x&db_id=x) gets bound by
         // Spring as a single comma-joined string ("x,x"), which would otherwise silently match no

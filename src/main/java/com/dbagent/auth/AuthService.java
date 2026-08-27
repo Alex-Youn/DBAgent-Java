@@ -17,7 +17,8 @@ import java.util.Optional;
 @Service
 public class AuthService {
 
-    public record AuthSession(String username, String role, List<String> hiddenMenus, List<String> hiddenDbs, String token) {
+    public record AuthSession(String username, String role, List<String> hiddenMenus, List<String> hiddenDbs,
+                               boolean fleetOverview, boolean fleetOverviewAutoRedirect, String token) {
     }
 
     private final JdbcTemplate jdbc;
@@ -43,6 +44,22 @@ public class AuthService {
         if (existingColumns.stream().noneMatch("hidden_dbs"::equalsIgnoreCase)) {
             jdbc.execute("ALTER TABLE users ADD COLUMN hidden_dbs TEXT");
         }
+        // Fleet Overview access is opt-in per account (사용자 요청: "Admin으로 로그인할때만 유효한거고
+        // 권한을 주면 가능하게") - unlike hidden_menus/hidden_dbs (deny-list, default visible), this is
+        // an allow-list defaulting to 0/false so a freshly created account can't see it until an admin
+        // explicitly grants it. admin itself bypasses this column entirely (see canAccessFleetOverview).
+        if (existingColumns.stream().noneMatch("fleet_overview"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE users ADD COLUMN fleet_overview INTEGER NOT NULL DEFAULT 0");
+        }
+        // Separate from the fleet_overview access grant above - this is "should logging in jump
+        // straight to Fleet Overview" (사용자 요청: "admin 권한도 진입 옵션 선택할 수 있나"), a personal
+        // preference any account with access can flip for themselves (see
+        // setFleetOverviewAutoRedirect), including admin - admin can't be edited through the normal
+        // 계정 관리 username-targeted update, but this one is self-service by token, not by username.
+        // Defaults to 1 (on) so granting access still auto-redirects until someone opts out.
+        if (existingColumns.stream().noneMatch("fleet_overview_auto_redirect"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE users ADD COLUMN fleet_overview_auto_redirect INTEGER NOT NULL DEFAULT 1");
+        }
 
         // Reset every session on server restart, same as the Python init_db().
         jdbc.update("UPDATE users SET token = NULL");
@@ -59,7 +76,7 @@ public class AuthService {
     public Optional<AuthSession> login(String username, String password) {
         Map<String, Object> row;
         try {
-            row = jdbc.queryForMap("SELECT password, role, hidden_menus, hidden_dbs FROM users WHERE username = ?", username);
+            row = jdbc.queryForMap("SELECT password, role, hidden_menus, hidden_dbs, fleet_overview, fleet_overview_auto_redirect FROM users WHERE username = ?", username);
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
@@ -70,15 +87,17 @@ public class AuthService {
         String token = HexFormat.of().formatHex(randomBytes(32));
         jdbc.update("UPDATE users SET token = ? WHERE username = ?", token, username);
         return Optional.of(new AuthSession(username, (String) row.get("role"),
-                parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")), token));
+                parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
+                isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
     }
 
     public Optional<AuthSession> sessionForToken(String token) {
         try {
             Map<String, Object> row = jdbc.queryForMap(
-                    "SELECT username, role, hidden_menus, hidden_dbs FROM users WHERE token = ?", token);
+                    "SELECT username, role, hidden_menus, hidden_dbs, fleet_overview, fleet_overview_auto_redirect FROM users WHERE token = ?", token);
             return Optional.of(new AuthSession((String) row.get("username"), (String) row.get("role"),
-                    parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")), token));
+                    parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
+                    isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
         } catch (EmptyResultDataAccessException e) {
             return Optional.empty();
         }
@@ -86,6 +105,30 @@ public class AuthService {
 
     public boolean isAdmin(String token) {
         return sessionForToken(token).map(s -> "admin".equals(s.role())).orElse(false);
+    }
+
+    /** Admin always has it; other accounts only if explicitly granted (fleet_overview column). */
+    public boolean canAccessFleetOverview(String token) {
+        return sessionForToken(token).map(s -> "admin".equals(s.role()) || s.fleetOverview()).orElse(false);
+    }
+
+    private boolean isTrue(Object dbValue) {
+        return dbValue instanceof Number n && n.intValue() != 0;
+    }
+
+    /**
+     * Self-service, by token rather than username - unlike updateUser() this is intentionally not
+     * blocked for admin, since it's a personal "jump to Fleet Overview on login or not" preference
+     * for whichever account is calling it, not an admin managing someone else's permissions.
+     */
+    public Map<String, Object> setFleetOverviewAutoRedirect(String token, boolean autoRedirect) {
+        Optional<AuthSession> session = sessionForToken(token);
+        if (session.isEmpty()) {
+            return Map.of("success", false, "message", "로그인이 필요합니다.");
+        }
+        jdbc.update("UPDATE users SET fleet_overview_auto_redirect = ? WHERE username = ?",
+                autoRedirect ? 1 : 0, session.get().username());
+        return Map.of("success", true);
     }
 
     /** A blank dbId (no specific instance selected yet) is always allowed; admins bypass the restriction. */
@@ -99,7 +142,7 @@ public class AuthService {
     }
 
     public Map<String, Object> createUser(String username, String password, String role,
-                                           List<String> hiddenMenus, List<String> hiddenDbs) {
+                                           List<String> hiddenMenus, List<String> hiddenDbs, boolean fleetOverview) {
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
             return Map.of("success", false, "message", "아이디와 비밀번호를 입력하세요.");
         }
@@ -108,18 +151,18 @@ public class AuthService {
             return Map.of("success", false, "message", "이미 존재하는 아이디입니다.");
         }
         String resolvedRole = "admin".equals(role) ? "admin" : "user";
-        jdbc.update("INSERT INTO users (username, password, role, hidden_menus, hidden_dbs) VALUES (?, ?, ?, ?, ?)",
-                username, passwordEncoder.encode(password), resolvedRole, joinCsv(hiddenMenus), joinCsv(hiddenDbs));
+        jdbc.update("INSERT INTO users (username, password, role, hidden_menus, hidden_dbs, fleet_overview) VALUES (?, ?, ?, ?, ?, ?)",
+                username, passwordEncoder.encode(password), resolvedRole, joinCsv(hiddenMenus), joinCsv(hiddenDbs), fleetOverview ? 1 : 0);
         return Map.of("success", true);
     }
 
-    public Map<String, Object> updateUser(String username, String role, List<String> hiddenMenus, List<String> hiddenDbs) {
+    public Map<String, Object> updateUser(String username, String role, List<String> hiddenMenus, List<String> hiddenDbs, boolean fleetOverview) {
         if ("admin".equals(username)) {
             return Map.of("success", false, "message", "admin 계정은 수정할 수 없습니다.");
         }
         String resolvedRole = "admin".equals(role) ? "admin" : "user";
-        int updated = jdbc.update("UPDATE users SET role = ?, hidden_menus = ?, hidden_dbs = ? WHERE username = ?",
-                resolvedRole, joinCsv(hiddenMenus), joinCsv(hiddenDbs), username);
+        int updated = jdbc.update("UPDATE users SET role = ?, hidden_menus = ?, hidden_dbs = ?, fleet_overview = ? WHERE username = ?",
+                resolvedRole, joinCsv(hiddenMenus), joinCsv(hiddenDbs), fleetOverview ? 1 : 0, username);
         if (updated == 0) {
             return Map.of("success", false, "message", "존재하지 않는 계정입니다.");
         }
@@ -127,12 +170,13 @@ public class AuthService {
     }
 
     public List<Map<String, Object>> listUsers() {
-        return jdbc.query("SELECT username, role, hidden_menus, hidden_dbs FROM users ORDER BY username", (rs, rowNum) -> {
+        return jdbc.query("SELECT username, role, hidden_menus, hidden_dbs, fleet_overview FROM users ORDER BY username", (rs, rowNum) -> {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("username", rs.getString("username"));
             row.put("role", rs.getString("role"));
             row.put("hidden_menus", parseCsv(rs.getString("hidden_menus")));
             row.put("hidden_dbs", parseCsv(rs.getString("hidden_dbs")));
+            row.put("fleet_overview", rs.getInt("fleet_overview") != 0);
             return row;
         });
     }

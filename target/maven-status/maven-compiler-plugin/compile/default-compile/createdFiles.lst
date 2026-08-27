@@ -32,6 +32,7 @@ com\dbagent\oracle\DatabaseConfigService.class
 com\dbagent\oracle\TargetDbConfig.class
 com\dbagent\aidba\ErrorSearchService.class
 com\dbagent\auth\AuthService.class
+com\dbagent\auth\SetFleetOverviewAutoRedirectRequest.class
 com\dbagent\auth\TokenRequest.class
 com\dbagent\aidba\OllamaChatService.class
 com\dbagent\oracle\PoolTestController.class

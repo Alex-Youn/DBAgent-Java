@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oracle DB 실시간 세션 모니터링 (예시)</title>
+<style>
+  :root {
+    /* fixed brand theme - product background is always #0f172a, no light mode */
+    color-scheme: dark;
+    --page:            #0f172a;   /* brand background */
+    --surface-1:       #1e293b;   /* card surface */
+    --surface-2:       #24334a;   /* nested / hover surface */
+    --text-primary:    #f1f5f9;
+    --text-secondary:  #cbd5e1;
+    --text-muted:      #94a3b8;
+    --gridline:        #334155;
+    --baseline:        #475569;
+    --border:          rgba(255,255,255,0.08);
+
+    --series-1: #3987e5; /* Active Session     - blue */
+    --series-2: #d95926; /* Active Transaction - orange */
+    --series-3: #199e70; /* Parallel Session   - aqua */
+
+    --status-good:     #0ca30c;
+    --status-warning:  #fab219;
+    --status-critical: #d03b3b;
+  }
+  /* contrast vs #0f172a, verified: status-good 5.3:1, status-warning 9.7:1,
+     status-critical 3.7:1, series-1 4.9:1, series-2 4.6:1, series-3 5.2:1,
+     text-secondary 12.0:1, text-muted 7.0:1 - all clear the 3:1 / 4.5:1 floors */
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 28px 24px 60px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+
+  header { margin-bottom: 22px; }
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    color: var(--text-muted); text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--status-good);
+    box-shadow: 0 0 0 0 rgba(12,163,12,.5);
+    animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(12,163,12,.45); }
+    70%  { box-shadow: 0 0 0 6px rgba(12,163,12,0); }
+    100% { box-shadow: 0 0 0 0 rgba(12,163,12,0); }
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;
+    margin-bottom: 14px;
+  }
+  .kpi .kpi-head { display:flex; align-items:center; gap:8px; margin-bottom: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .kpi-label { font-size: 12.5px; color: var(--text-secondary); }
+  .kpi-value-row { display:flex; align-items: baseline; gap: 8px; }
+  .kpi-value { font-size: 30px; font-weight: 600; line-height:1; }
+  .kpi-delta { font-size: 12.5px; font-weight: 600; }
+  .kpi-delta.up { color: var(--status-critical); }
+  .kpi-delta.down { color: var(--status-good); }
+  .kpi-delta.flat { color: var(--text-muted); }
+  .kpi-spark { display:block; margin-top: 10px; }
+
+  .main-chart { margin-bottom: 14px; }
+  .chart-head { display:flex; justify-content: space-between; align-items:flex-start; margin-bottom: 4px; }
+  .chart-title { font-size: 14px; font-weight: 600; }
+  .chart-note { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .legend { display:flex; gap: 16px; flex-wrap: wrap; }
+  .legend-item { display:flex; align-items:center; gap:6px; font-size:12.5px; color: var(--text-secondary); }
+
+  .chart-shell { position: relative; }
+  #mainChart { width: 100%; height: 260px; display:block; overflow: visible; }
+  .tooltip {
+    position: absolute; pointer-events: none;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    opacity: 0; transform: translate(-50%, -110%);
+    transition: opacity .08s ease;
+    white-space: nowrap;
+  }
+  .tooltip .t-time { color: var(--text-muted); margin-bottom: 4px; }
+  .tooltip .t-row { display:flex; align-items:center; gap:6px; }
+  .tooltip .t-row + .t-row { margin-top: 3px; }
+  .tooltip .t-val { color: var(--text-primary); font-weight: 600; margin-left: auto; padding-left: 10px; }
+
+  .status-row { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .status-card { display:flex; flex-direction: column; gap: 10px; }
+  .status-card.is-active { border-color: currentColor; }
+  .status-head { display:flex; align-items:center; gap: 8px; }
+  .status-icon {
+    width: 20px; height: 20px; border-radius: 6px;
+    display:flex; align-items:center; justify-content:center;
+    font-size: 12px; font-weight: 700; flex: none;
+  }
+  .status-title { font-size: 13px; font-weight: 600; }
+  .status-badge {
+    margin-left: auto; font-size: 11px; font-weight: 700;
+    padding: 2px 8px; border-radius: 999px;
+  }
+  .status-body { display:flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
+  .status-value { font-size: 28px; font-weight: 600; line-height:1; }
+  .status-unit { font-size: 12px; color: var(--text-muted); margin-left: 4px; font-weight: 500; }
+  .status-bars { display:flex; align-items:flex-end; gap: 3px; height: 34px; }
+  .status-bars rect { }
+
+  footer.note {
+    margin-top: 20px; font-size: 12px; color: var(--text-muted); line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow"><span class="live-dot"></span>LIVE · 예시 데이터 (실제 값 아님)</div>
+    <h1>Oracle DB 실시간 세션 모니터링</h1>
+    <p class="sub">Active Session · Active Transaction · Parallel Session · Lock Wait · 2PC Pending Transaction</p>
+  </header>
+
+  <!-- KPI stat tiles: continuous metrics -->
+  <div class="kpi-row">
+    <div class="card kpi" id="kpi-as">
+      <div class="kpi-head"><span class="dot" style="background:var(--series-1)"></span><span class="kpi-label">Active Session</span></div>
+      <div class="kpi-value-row"><span class="kpi-value" id="kpi-as-val">--</span><span class="kpi-delta" id="kpi-as-delta"></span></div>
+      <svg class="kpi-spark" id="kpi-as-spark" width="100%" height="30" viewBox="0 0 200 30" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card kpi" id="kpi-at">
+      <div class="kpi-head"><span class="dot" style="background:var(--series-2)"></span><span class="kpi-label">Active Transaction</span></div>
+      <div class="kpi-value-row"><span class="kpi-value" id="kpi-at-val">--</span><span class="kpi-delta" id="kpi-at-delta"></span></div>
+      <svg class="kpi-spark" id="kpi-at-spark" width="100%" height="30" viewBox="0 0 200 30" preserveAspectRatio="none"></svg>
+    </div>
+    <div class="card kpi" id="kpi-ps">
+      <div class="kpi-head"><span class="dot" style="background:var(--series-3)"></span><span class="kpi-label">Parallel Session</span></div>
+      <div class="kpi-value-row"><span class="kpi-value" id="kpi-ps-val">--</span><span class="kpi-delta" id="kpi-ps-delta"></span></div>
+      <svg class="kpi-spark" id="kpi-ps-spark" width="100%" height="30" viewBox="0 0 200 30" preserveAspectRatio="none"></svg>
+    </div>
+  </div>
+
+  <!-- Main multi-line chart -->
+  <div class="card main-chart">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">세션 · 트랜잭션 추이 (최근 1분)</div>
+        <div class="chart-note">3개 지표는 서로 다른 값이라 스택(누적)이 아닌 개별 라인으로 겹쳐서 비교합니다</div>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="dot" style="background:var(--series-1)"></span>Active Session</div>
+        <div class="legend-item"><span class="dot" style="background:var(--series-2)"></span>Active Transaction</div>
+        <div class="legend-item"><span class="dot" style="background:var(--series-3)"></span>Parallel Session</div>
+      </div>
+    </div>
+    <div class="chart-shell">
+      <svg id="mainChart" viewBox="0 0 900 260" preserveAspectRatio="none"></svg>
+      <div class="tooltip" id="tooltip">
+        <div class="t-time" id="tt-time"></div>
+        <div class="t-row"><span class="dot" style="background:var(--series-1)"></span>Active Session<span class="t-val" id="tt-as"></span></div>
+        <div class="t-row"><span class="dot" style="background:var(--series-2)"></span>Active Transaction<span class="t-val" id="tt-at"></span></div>
+        <div class="t-row"><span class="dot" style="background:var(--series-3)"></span>Parallel Session<span class="t-val" id="tt-ps"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status / alert cards: event-style metrics -->
+  <div class="status-row">
+    <div class="card status-card" id="status-lock">
+      <div class="status-head">
+        <div class="status-icon" id="lock-icon">!</div>
+        <div class="status-title">Lock Wait</div>
+        <div class="status-badge" id="lock-badge">정상</div>
+      </div>
+      <div class="status-body">
+        <div><span class="status-value" id="lock-val">0</span><span class="status-unit">건</span></div>
+        <svg class="status-bars" id="lock-bars" width="120" height="34" viewBox="0 0 120 34" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+    <div class="card status-card" id="status-2pc">
+      <div class="status-head">
+        <div class="status-icon" id="pc-icon">!</div>
+        <div class="status-title">2PC Pending Transaction</div>
+        <div class="status-badge" id="pc-badge">정상</div>
+      </div>
+      <div class="status-body">
+        <div><span class="status-value" id="pc-val">0</span><span class="status-unit">건</span></div>
+        <svg class="status-bars" id="pc-bars" width="120" height="34" viewBox="0 0 120 34" preserveAspectRatio="none"></svg>
+      </div>
+    </div>
+  </div>
+
+  <footer class="note">
+    더미 데이터로 2초마다 갱신됩니다. 색상: 연속적으로 변하는 3개 지표(Active Session/Transaction/Parallel Session)는 구분용 카테고리 색상, 평소 0이다가 문제 시에만 튀는 Lock Wait·2PC Pending은 별도의 경고색(주황/빨강)으로 분리해 정상 카테고리 색상과 섞이지 않게 했습니다.
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  var MAX_POINTS = 30;
+  var TICK_MS = 2000;
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function css(name) { return getComputedStyle(document.body).getPropertyValue(name).trim(); }
+
+  function walk(prev, step, lo, hi) {
+    return clamp(prev + (Math.random() - 0.5) * step, lo, hi);
+  }
+  function spikeMetric(prev, spikeProb, maxSpike) {
+    if (prev > 0) return Math.random() < 0.55 ? Math.max(0, prev - 1) : prev;
+    return Math.random() < spikeProb ? (1 + Math.floor(Math.random() * maxSpike)) : 0;
+  }
+
+  var S = {
+    times: [],
+    as: [], at: [], ps: [], lock: [], pc: []
+  };
+
+  // seed history
+  var as = 42, at = 16, ps = 7, lock = 0, pc = 0;
+  var now = Date.now() - MAX_POINTS * TICK_MS;
+  for (var i = 0; i < MAX_POINTS; i++) {
+    as = walk(as, 8, 15, 75);
+    at = walk(at, 4, 3, 30);
+    ps = walk(ps, 3, 0, 18);
+    lock = spikeMetric(lock, 0.10, 4);
+    pc = spikeMetric(pc, 0.05, 2);
+    S.times.push(now); S.as.push(as); S.at.push(at); S.ps.push(ps); S.lock.push(lock); S.pc.push(pc);
+    now += TICK_MS;
+  }
+
+  function push() {
+    as = walk(as, 8, 15, 75);
+    at = walk(at, 4, 3, 30);
+    ps = walk(ps, 3, 0, 18);
+    lock = spikeMetric(lock, 0.10, 4);
+    pc = spikeMetric(pc, 0.05, 2);
+    S.times.push(Date.now()); S.as.push(as); S.at.push(at); S.ps.push(ps); S.lock.push(lock); S.pc.push(pc);
+    if (S.times.length > MAX_POINTS) {
+      ['times','as','at','ps','lock','pc'].forEach(function(k){ S[k].shift(); });
+    }
+  }
+
+  function fmtTime(ts) {
+    var d = new Date(ts);
+    function p(n){ return (n<10?'0':'')+n; }
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  // ---- KPI tiles ----
+  function renderKpi(prefix, data, color) {
+    var val = data[data.length - 1];
+    var prevVal = data.length > 5 ? data[data.length - 6] : data[0];
+    var delta = val - prevVal;
+    document.getElementById('kpi-' + prefix + '-val').textContent = Math.round(val);
+    var deltaEl = document.getElementById('kpi-' + prefix + '-delta');
+    var sign = delta > 0.5 ? '▲' : (delta < -0.5 ? '▼' : '·');
+    var cls = delta > 0.5 ? 'up' : (delta < -0.5 ? 'down' : 'flat');
+    deltaEl.textContent = sign + ' ' + Math.abs(Math.round(delta));
+    deltaEl.className = 'kpi-delta ' + cls;
+
+    var svg = document.getElementById('kpi-' + prefix + '-spark');
+    var n = data.length, w = 200, h = 30, pad = 3;
+    var lo = Math.min.apply(null, data), hi = Math.max.apply(null, data);
+    if (hi - lo < 1) { hi = lo + 1; }
+    function x(i){ return pad + (i/(n-1)) * (w - pad*2); }
+    function y(v){ return h - pad - ((v-lo)/(hi-lo)) * (h - pad*2); }
+    var full = data.map(function(v,i){ return (i===0?'M':'L') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ');
+    var tailStart = Math.max(0, n - 4);
+    var tail = data.slice(tailStart).map(function(v,idx){
+      var i = tailStart + idx;
+      return (idx===0?'M':'L') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+    }).join(' ');
+    svg.innerHTML =
+      '<path d="' + full + '" fill="none" stroke="' + css('--text-muted') + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>' +
+      '<path d="' + tail + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="' + x(n-1).toFixed(1) + '" cy="' + y(data[n-1]).toFixed(1) + '" r="3.5" fill="' + color + '" stroke="' + css('--surface-1') + '" stroke-width="2"/>';
+  }
+
+  // ---- Main multi-line chart ----
+  var chartMeta = { x: null, w: 900, h: 260 };
+  function renderMainChart() {
+    var svg = document.getElementById('mainChart');
+    var W = 900, H = 260;
+    var pad = { l: 34, r: 16, t: 14, b: 26 };
+    var plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+    var n = S.times.length;
+    var maxV = Math.max(80, Math.ceil(Math.max.apply(null, S.as) / 20) * 20);
+
+    function x(i){ return pad.l + (i/(n-1)) * plotW; }
+    function y(v){ return pad.t + plotH - (v/maxV) * plotH; }
+    chartMeta = { x: x, y: y, pad: pad, plotW: plotW, plotH: plotH, maxV: maxV, n: n };
+
+    var grid = '';
+    var ticks = 4;
+    for (var g = 0; g <= ticks; g++) {
+      var v = (maxV / ticks) * g;
+      var gy = y(v);
+      grid += '<line x1="' + pad.l + '" x2="' + (W - pad.r) + '" y1="' + gy.toFixed(1) + '" y2="' + gy.toFixed(1) + '" stroke="' + css('--gridline') + '" stroke-width="1"/>';
+      grid += '<text x="' + (pad.l - 8) + '" y="' + (gy + 4).toFixed(1) + '" text-anchor="end" font-size="10.5" fill="' + css('--text-muted') + '">' + Math.round(v) + '</text>';
+    }
+
+    function seriesPath(data, color) {
+      var d = data.map(function(v,i){ return (i===0?'M':'L') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ');
+      var lastX = x(n-1), lastY = y(data[n-1]);
+      return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+             '<circle cx="' + lastX.toFixed(1) + '" cy="' + lastY.toFixed(1) + '" r="4" fill="' + color + '" stroke="' + css('--surface-1') + '" stroke-width="2"/>';
+    }
+
+    var axisLine = '<line x1="' + pad.l + '" x2="' + (W - pad.r) + '" y1="' + (H - pad.b) + '" y2="' + (H - pad.b) + '" stroke="' + css('--baseline') + '" stroke-width="1"/>';
+
+    svg.innerHTML = grid + axisLine +
+      seriesPath(S.as, css('--series-1')) +
+      seriesPath(S.at, css('--series-2')) +
+      seriesPath(S.ps, css('--series-3')) +
+      '<rect id="hoverCatcher" x="' + pad.l + '" y="' + pad.t + '" width="' + plotW + '" height="' + plotH + '" fill="transparent"/>' +
+      '<line id="crosshair" x1="0" x2="0" y1="' + pad.t + '" y2="' + (H - pad.b) + '" stroke="' + css('--text-muted') + '" stroke-width="1" stroke-dasharray="3,3" opacity="0"/>';
+  }
+
+  // hover tooltip (attached once; reads latest chartMeta/S each move)
+  var chartShell = document.querySelector('.chart-shell');
+  var tooltip = document.getElementById('tooltip');
+  document.getElementById('mainChart').addEventListener('mousemove', function (evt) {
+    if (!chartMeta.x) return;
+    var svg = evt.currentTarget;
+    var rect = svg.getBoundingClientRect();
+    var scaleX = 900 / rect.width;
+    var mx = (evt.clientX - rect.left) * scaleX;
+    var n = chartMeta.n;
+    var idx = Math.round(((mx - chartMeta.pad.l) / chartMeta.plotW) * (n - 1));
+    idx = clamp(idx, 0, n - 1);
+
+    var cx = chartMeta.x(idx);
+    var ch = document.getElementById('crosshair');
+    if (ch) { ch.setAttribute('x1', cx); ch.setAttribute('x2', cx); ch.setAttribute('opacity', 1); }
+
+    document.getElementById('tt-time').textContent = fmtTime(S.times[idx]);
+    document.getElementById('tt-as').textContent = Math.round(S.as[idx]);
+    document.getElementById('tt-at').textContent = Math.round(S.at[idx]);
+    document.getElementById('tt-ps').textContent = Math.round(S.ps[idx]);
+
+    var shellRect = chartShell.getBoundingClientRect();
+    var px = rect.left - shellRect.left + cx / scaleX;
+    var py = rect.top - shellRect.top + chartMeta.y(S.as[idx]) / scaleX;
+    tooltip.style.left = px + 'px';
+    tooltip.style.top = py + 'px';
+    tooltip.style.opacity = 1;
+  });
+  document.getElementById('mainChart').addEventListener('mouseleave', function () {
+    tooltip.style.opacity = 0;
+    var ch = document.getElementById('crosshair');
+    if (ch) ch.setAttribute('opacity', 0);
+  });
+
+  // ---- Status cards ----
+  function renderStatus(prefix, data, color, statusVarName, label) {
+    var val = data[data.length - 1];
+    var isActive = val > 0;
+    document.getElementById(prefix + '-val').textContent = Math.round(val);
+    var badge = document.getElementById(prefix + '-badge');
+    var icon = document.getElementById(prefix + '-icon');
+    var cardEl = document.getElementById('status-' + prefix.replace('lock','lock').replace('pc','2pc'));
+
+    if (isActive) {
+      badge.textContent = '대기 발생';
+      badge.style.background = color; badge.style.color = '#fff';
+      icon.style.background = color; icon.style.color = '#fff';
+      icon.textContent = '!';
+    } else {
+      badge.textContent = '정상';
+      badge.style.background = 'transparent';
+      badge.style.color = css('--text-muted');
+      icon.style.background = css('--gridline');
+      icon.style.color = css('--text-muted');
+      icon.textContent = '✓';
+    }
+
+    var svg = document.getElementById(prefix + '-bars');
+    var w = 120, h = 34, gap = 3, n = data.length;
+    var bw = (w - gap * (n - 1)) / n;
+    var maxV = Math.max(4, Math.max.apply(null, data));
+    var bars = '';
+    for (var i = 0; i < n; i++) {
+      var v = data[i];
+      var bh = v === 0 ? 2 : Math.max(3, (v / maxV) * (h - 2));
+      var bx = i * (bw + gap);
+      var by = h - bh;
+      var bc = v > 0 ? color : css('--gridline');
+      bars += '<rect x="' + bx.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + bh.toFixed(1) + '" rx="1.5" fill="' + bc + '"/>';
+    }
+    svg.innerHTML = bars;
+  }
+
+  function renderAll() {
+    renderKpi('as', S.as, css('--series-1'));
+    renderKpi('at', S.at, css('--series-2'));
+    renderKpi('ps', S.ps, css('--series-3'));
+    renderMainChart();
+    renderStatus('lock', S.lock, css('--status-critical'));
+    renderStatus('pc', S.pc, css('--status-warning'));
+  }
+
+  renderAll();
+  setInterval(function () { push(); renderAll(); }, TICK_MS);
+})();
+</script>
+</body>
+</html>

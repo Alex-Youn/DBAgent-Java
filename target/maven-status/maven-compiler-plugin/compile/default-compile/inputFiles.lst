@@ -7,6 +7,7 @@ C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\AuthService.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\ChangePasswordRequest.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\CreateUserRequest.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\LoginRequest.java
+C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\SetFleetOverviewAutoRedirectRequest.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\TokenRequest.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\UpdateUserRequest.java
 C:\AI-PROJECTS\DBAgent-Java\src\main\java\com\dbagent\auth\UserController.java

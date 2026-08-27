@@ -10,5 +10,6 @@ public record CreateUserRequest(
         String password,
         String role,
         @JsonProperty("hidden_menus") List<String> hiddenMenus,
-        @JsonProperty("hidden_dbs") List<String> hiddenDbs) {
+        @JsonProperty("hidden_dbs") List<String> hiddenDbs,
+        @JsonProperty("fleet_overview") Boolean fleetOverview) {
 }
