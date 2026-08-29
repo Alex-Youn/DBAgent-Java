@@ -9,8 +9,8 @@
       "sid" : "ORCL",
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : null,
-      "pool_max_size" : null,
+      "pool_min_idle" : 8,
+      "pool_max_size" : 12,
       "session_thresholds" : [ 80, 90, 100, 110, 120 ],
       "accounts" : [ {
         "user" : "apdba",
@@ -25,7 +25,8 @@
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
-      "pool_max_size" : null
+      "pool_max_size" : null,
+      "session_thresholds" : [ 80, 90, 100, 110, 120 ]
     } ]
   }, {
     "group_name" : "특허넷 검색DB",
@@ -34,9 +35,9 @@
       "name" : "검색DB #1",
       "host" : "",
       "port" : 1521,
-      "sid" : "SRCH1",
-      "user" : "system",
-      "password" : "B64(c3lz)",
+      "sid" : "ORCL3",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     }, {
@@ -44,9 +45,9 @@
       "name" : "검색DB #2",
       "host" : "",
       "port" : 1521,
-      "sid" : "SRCH2",
-      "user" : "system",
-      "password" : "B64(c3lz)",
+      "sid" : "ORCL4",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
@@ -57,9 +58,9 @@
       "name" : "포탈 #1",
       "host" : "",
       "port" : 1521,
-      "sid" : "PORT1",
-      "user" : "system",
-      "password" : "B64(c3lz)",
+      "sid" : "ORCL5",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     }, {
@@ -67,42 +68,34 @@
       "name" : "포탈 #2",
       "host" : "",
       "port" : 1521,
-      "sid" : "PORT2",
-      "user" : "system",
-      "password" : "B64(c3lz)",
+      "sid" : "ORCL6",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
   }, {
-    "group_name" : "TEST",
+    "group_name" : "특허업무 기타",
     "instances" : [ {
-      "id" : "TEST01",
-      "name" : "TEST_DB",
-      "host" : "",
-      "port" : 1522,
-      "sid" : "ORCL3",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : 2,
-      "pool_max_size" : 10,
-      "accounts" : [ {
-        "user" : "apdba",
-        "password" : "B64(YXBkYmE=)"
-      } ]
-    }, {
-      "id" : "TEST02",
-      "name" : "TEST_DB01",
+      "id" : "patent_portal_1",
+      "name" : "기타 #1",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL4",
+      "sid" : "ORCL7",
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : 2,
-      "pool_max_size" : 4,
-      "accounts" : [ {
-        "user" : "apdba",
-        "password" : "B64(YXBkYmEwMQ==)"
-      } ]
+      "pool_min_idle" : null,
+      "pool_max_size" : null
+    }, {
+      "id" : "patent_portal_2",
+      "name" : "기타 #2",
+      "host" : "",
+      "port" : 1521,
+      "sid" : "ORCL8",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
     } ]
   } ]
 }
