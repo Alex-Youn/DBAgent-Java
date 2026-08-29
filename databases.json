@@ -96,6 +96,26 @@
       "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
       "pool_max_size" : null
+    }, {
+      "id" : "ORCL9_ID",
+      "name" : "ORCL9",
+      "host" : "",
+      "port" : 1521,
+      "sid" : "ORCL9",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
+      "pool_min_idle" : 2,
+      "pool_max_size" : 9
+    }, {
+      "id" : "ORCL10_ID",
+      "name" : "ORCL10",
+      "host" : "",
+      "port" : 1521,
+      "sid" : "ORCL10",
+      "user" : "dbagent_user",
+      "password" : "B64(ZGJhZ2VudDAx)",
+      "pool_min_idle" : 2,
+      "pool_max_size" : 6
     } ]
   } ]
 }
