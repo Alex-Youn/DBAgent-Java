@@ -1,8 +1,12 @@
 package com.dbagent.auth;
 
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class AuthService {
@@ -21,9 +26,17 @@ public class AuthService {
                                boolean fleetOverview, boolean fleetOverviewAutoRedirect, String token) {
     }
 
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
     private final JdbcTemplate jdbc;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
     private final SecureRandom secureRandom = new SecureRandom();
+
+    // 세션 테이블이 로그아웃 없이는 무제한으로 쌓이는 문제(사용자 피드백, 2026-08-29) 대응 - 이 기간이
+    // 지난 세션은 로그인 상태가 자동 만료됨. 계정당 멀티세션 지원(여러 기기 동시 로그인) 자체는 그대로
+    // 유지하면서, 오래 방치된 토큰만 정리한다.
+    @Value("${dbagent.auth.session-ttl-days:30}")
+    private int sessionTtlDays;
 
     public AuthService(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
@@ -39,6 +52,12 @@ public class AuthService {
         // rather than dropped (SQLite ALTER TABLE DROP COLUMN support is version-dependent, and there's
         // nothing left reading it).
         jdbc.execute("CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL)");
+
+        List<String> existingSessionColumns = jdbc.query("PRAGMA table_info(sessions)",
+                (rs, rowNum) -> rs.getString("name"));
+        if (existingSessionColumns.stream().noneMatch("created_at"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE sessions ADD COLUMN created_at INTEGER");
+        }
 
         List<String> existingColumns = jdbc.query("PRAGMA table_info(users)",
                 (rs, rowNum) -> rs.getString("name"));
@@ -92,7 +111,8 @@ public class AuthService {
             return Optional.empty();
         }
         String token = HexFormat.of().formatHex(randomBytes(32));
-        jdbc.update("INSERT INTO sessions (token, username) VALUES (?, ?)", token, username);
+        jdbc.update("INSERT INTO sessions (token, username, created_at) VALUES (?, ?, ?)",
+                token, username, System.currentTimeMillis());
         return Optional.of(new AuthSession(username, (String) row.get("role"),
                 parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
                 isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
@@ -100,9 +120,15 @@ public class AuthService {
 
     public Optional<AuthSession> sessionForToken(String token) {
         try {
+            // 정리 작업(cleanupExpiredSessions)이 아직 안 돌았어도 만료된 토큰은 즉시 거부되도록, 조회
+            // 시점에도 TTL을 한 번 더 체크한다. created_at이 NULL인 행을 걱정할 필요는 없음 - init()이
+            // 재기동마다 sessions 테이블을 통째로 비우므로(위 DELETE FROM sessions), 이 빌드가 뜬 뒤
+            // 만들어진 행은 전부 INSERT 시점에 created_at이 채워진다.
             Map<String, Object> row = jdbc.queryForMap(
                     "SELECT u.username, u.role, u.hidden_menus, u.hidden_dbs, u.fleet_overview, u.fleet_overview_auto_redirect " +
-                            "FROM sessions s JOIN users u ON u.username = s.username WHERE s.token = ?", token);
+                            "FROM sessions s JOIN users u ON u.username = s.username " +
+                            "WHERE s.token = ? AND s.created_at >= ?",
+                    token, sessionExpiryCutoffMs());
             return Optional.of(new AuthSession((String) row.get("username"), (String) row.get("role"),
                     parseCsv((String) row.get("hidden_menus")), parseCsv((String) row.get("hidden_dbs")),
                     isTrue(row.get("fleet_overview")), isTrue(row.get("fleet_overview_auto_redirect")), token));
@@ -227,8 +253,9 @@ public class AuthService {
     }
 
     public boolean changePassword(String token, String currentPassword, String newPassword) {
-        var row = jdbc.query("SELECT u.username, u.password FROM sessions s JOIN users u ON u.username = s.username WHERE s.token = ?",
-                (rs, rowNum) -> new String[]{rs.getString("username"), rs.getString("password")}, token);
+        var row = jdbc.query("SELECT u.username, u.password FROM sessions s JOIN users u ON u.username = s.username " +
+                        "WHERE s.token = ? AND s.created_at >= ?",
+                (rs, rowNum) -> new String[]{rs.getString("username"), rs.getString("password")}, token, sessionExpiryCutoffMs());
         if (row.isEmpty()) {
             return false;
         }
@@ -246,5 +273,20 @@ public class AuthService {
         byte[] b = new byte[n];
         secureRandom.nextBytes(b);
         return b;
+    }
+
+    private long sessionExpiryCutoffMs() {
+        return System.currentTimeMillis() - TimeUnit.DAYS.toMillis(sessionTtlDays);
+    }
+
+    // 매일 새벽 3시에 TTL 지난 세션을 정리 - sessionForToken()/changePassword()의 조회 시점 필터링과
+    // 별개로, 로그인조차 안 된 채 방치된 만료 토큰 행이 테이블에 무한정 남지 않도록 실제로 삭제한다.
+    @Scheduled(cron = "0 0 3 * * *")
+    void cleanupExpiredSessions() {
+        int deleted = jdbc.update("DELETE FROM sessions WHERE created_at < ?",
+                sessionExpiryCutoffMs());
+        if (deleted > 0) {
+            log.info("Cleaned up {} expired session(s) older than {} day(s)", deleted, sessionTtlDays);
+        }
     }
 }
