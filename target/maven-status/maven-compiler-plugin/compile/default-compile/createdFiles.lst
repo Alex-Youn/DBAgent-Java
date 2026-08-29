@@ -19,6 +19,7 @@ com\dbagent\auth\AuthController.class
 com\dbagent\oracle\UpdateDbInstanceRequest.class
 com\dbagent\query\SqlQueryController.class
 com\dbagent\sqltuning\BindCaptureRequest.class
+com\dbagent\config\StaticResourceConfig.class
 com\dbagent\monitor\MonitorService.class
 com\dbagent\aidba\ChatRequest.class
 com\dbagent\sqltuning\SqlTuningAutoRequest.class

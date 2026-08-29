@@ -11,6 +11,7 @@ C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\SetFleetOverviewAutoR
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\TokenRequest.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\UpdateUserRequest.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\UserController.java
+C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\config\StaticResourceConfig.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\DbAgentApplication.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\KillSessionRequest.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\MonitorController.java
