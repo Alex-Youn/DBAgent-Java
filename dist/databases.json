@@ -77,7 +77,7 @@
   }, {
     "group_name" : "특허업무 기타",
     "instances" : [ {
-      "id" : "patent_portal_1",
+      "id" : "patent_etc_1",
       "name" : "기타 #1",
       "host" : "",
       "port" : 1521,
@@ -87,7 +87,7 @@
       "pool_min_idle" : null,
       "pool_max_size" : null
     }, {
-      "id" : "patent_portal_2",
+      "id" : "patent_etc_2",
       "name" : "기타 #2",
       "host" : "",
       "port" : 1521,
