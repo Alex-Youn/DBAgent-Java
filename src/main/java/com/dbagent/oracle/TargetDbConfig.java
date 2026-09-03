@@ -3,6 +3,8 @@ package com.dbagent.oracle;
 public record TargetDbConfig(
         String id,
         String name,
+        // "oracle" (default, legacy instances have no db_type in databases.json) / "mysql" / "mariadb" / "postgres".
+        String dbType,
         String user,
         String password,
         String host,

@@ -44,6 +44,20 @@
             <version>3.46.1.3</version>
         </dependency>
 
+        <!-- MariaDB JDBC driver - also used for db_type=mysql (wire-protocol compatible with MySQL) -->
+        <dependency>
+            <groupId>org.mariadb.jdbc</groupId>
+            <artifactId>mariadb-java-client</artifactId>
+            <version>3.5.1</version>
+        </dependency>
+
+        <!-- PostgreSQL JDBC driver -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.4</version>
+        </dependency>
+
         <!-- Password hashing (replaces werkzeug.security) -->
         <dependency>
             <groupId>org.springframework.security</groupId>

@@ -3,6 +3,8 @@ package com.dbagent.monitor;
 import com.dbagent.auth.AuthService;
 import com.dbagent.oracle.DatabaseConfigService;
 import com.dbagent.oracle.TargetDbConfig;
+import com.dbagent.rdb.MySqlMonitorService;
+import com.dbagent.rdb.PostgresMonitorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,11 +37,16 @@ public class MonitorController {
     private final MonitorService monitorService;
     private final DatabaseConfigService configService;
     private final AuthService authService;
+    private final MySqlMonitorService mySqlMonitorService;
+    private final PostgresMonitorService postgresMonitorService;
 
-    public MonitorController(MonitorService monitorService, DatabaseConfigService configService, AuthService authService) {
+    public MonitorController(MonitorService monitorService, DatabaseConfigService configService, AuthService authService,
+            MySqlMonitorService mySqlMonitorService, PostgresMonitorService postgresMonitorService) {
         this.monitorService = monitorService;
         this.configService = configService;
         this.authService = authService;
+        this.mySqlMonitorService = mySqlMonitorService;
+        this.postgresMonitorService = postgresMonitorService;
     }
 
     @GetMapping("/tmlock")
@@ -48,8 +55,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getTmLocks(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getTmLocks(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -64,9 +75,13 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
             return ResponseEntity.ok(monitorService.getErdSchema(
-                    configService.resolve(db_id), owner.toUpperCase(), prefix.toUpperCase()));
+                    target, owner.toUpperCase(), prefix.toUpperCase()));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -78,8 +93,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getSessions(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getSessions(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -91,8 +110,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getSessionExtra(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getSessionExtra(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -104,8 +127,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getTablespaces(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getTablespaces(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -119,8 +146,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getTablespaceDatafiles(configService.resolve(db_id), tablespaceName.toUpperCase()));
+            return ResponseEntity.ok(monitorService.getTablespaceDatafiles(target, tablespaceName.toUpperCase()));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -132,8 +163,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getDashboardStats(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getDashboardStats(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -172,10 +207,23 @@ public class MonitorController {
     private CompletableFuture<Map<String, Object>> fleetStatusFor(TargetDbConfig inst) {
         return fleetStatusInFlight.computeIfAbsent(inst.id(), id -> {
             CompletableFuture<Map<String, Object>> f =
-                    CompletableFuture.supplyAsync(() -> monitorService.getFleetStatus(inst), FLEET_STATUS_EXECUTOR);
+                    CompletableFuture.supplyAsync(() -> fleetStatusDispatch(inst), FLEET_STATUS_EXECUTOR);
             f.whenComplete((result, error) -> fleetStatusInFlight.remove(id, f));
             return f;
         });
+    }
+
+    // Only seam that's engine-aware - every other piece of fleet_status orchestration (executor,
+    // in-flight de-dupe, timeout wrapping, per-instance auth filtering below) stays untouched.
+    private Map<String, Object> fleetStatusDispatch(TargetDbConfig inst) {
+        String dbType = inst.dbType();
+        if (dbType == null || "oracle".equals(dbType)) {
+            return monitorService.getFleetStatus(inst);
+        }
+        if ("postgres".equals(dbType)) {
+            return postgresMonitorService.getFleetStatus(inst);
+        }
+        return mySqlMonitorService.getFleetStatus(inst);
     }
 
     // Deliberately not CompletableFuture.orTimeout(): that completes the *same* future it's called
@@ -248,8 +296,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getTopEvents(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getTopEvents(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -265,8 +317,12 @@ public class MonitorController {
         if (req.sessions() == null || req.sessions().isEmpty()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "No sessions provided"));
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            List<Map<String, Object>> results = monitorService.killSessions(configService.resolve(db_id), req.sessions());
+            List<Map<String, Object>> results = monitorService.killSessions(target, req.sessions());
             return ResponseEntity.ok(Map.of("results", results));
         } catch (SQLException e) {
             return dbError(e);
@@ -282,8 +338,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getRelation(configService.resolve(db_id), tableName.toUpperCase(), direction));
+            return ResponseEntity.ok(monitorService.getRelation(target, tableName.toUpperCase(), direction));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -301,8 +361,12 @@ public class MonitorController {
         if ((sid == null || sid.isBlank()) && (sqlId == null || sqlId.isBlank())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "SID or SQL_ID is required"));
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getSessionQuery(configService.resolve(db_id), sid, sqlId));
+            return ResponseEntity.ok(monitorService.getSessionQuery(target, sid, sqlId));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -316,8 +380,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getTableInfo(configService.resolve(db_id), tableName.toUpperCase()));
+            return ResponseEntity.ok(monitorService.getTableInfo(target, tableName.toUpperCase()));
         } catch (SQLException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
@@ -329,8 +397,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getFailureProb(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getFailureProb(target));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -349,8 +421,12 @@ public class MonitorController {
         if (startTime == null || endTime == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "start_time and end_time are required"));
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getHistorySessions(configService.resolve(db_id), startTime, endTime, users));
+            return ResponseEntity.ok(monitorService.getHistorySessions(target, startTime, endTime, users));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -362,7 +438,11 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
-        return ResponseEntity.ok(monitorService.getHealth(configService.resolve(db_id)));
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
+        return ResponseEntity.ok(monitorService.getHealth(target));
     }
 
     @GetMapping("/history_top_sessions")
@@ -378,8 +458,12 @@ public class MonitorController {
         if (startTime == null || endTime == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "start_time and end_time are required"));
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getHistoryTopSessions(configService.resolve(db_id), startTime, endTime, users));
+            return ResponseEntity.ok(monitorService.getHistoryTopSessions(target, startTime, endTime, users));
         } catch (SQLException e) {
             return dbError(e);
         }
@@ -391,8 +475,12 @@ public class MonitorController {
         if (!authService.canAccessDb(token, db_id)) {
             return dbAccessDenied();
         }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
         try {
-            return ResponseEntity.ok(monitorService.getDbUsers(configService.resolve(db_id)));
+            return ResponseEntity.ok(monitorService.getDbUsers(target));
         } catch (SQLException e) {
             return ResponseEntity.ok(Map.of("error", e.getMessage()));
         }
@@ -404,5 +492,9 @@ public class MonitorController {
 
     private ResponseEntity<Object> dbAccessDenied() {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "해당 DB에 대한 접근 권한이 없습니다."));
+    }
+
+    private ResponseEntity<Object> dbNotFound() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "등록되지 않은 DB입니다."));
     }
 }

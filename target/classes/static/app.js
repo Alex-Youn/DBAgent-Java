@@ -387,7 +387,15 @@ function getToken() {
         applyMenuVisibility();
 
         window.currentDbId = "";
-        
+
+        // MySQL/MariaDB and PostgreSQL each get their own PMM-style Overview/Detail dashboard - the
+        // panel terminology differs too much (InnoDB/MySQL Handlers vs pg_stat_* views) to share one page.
+        function rdbTargetPage(dbType) {
+            if (dbType === 'mysql' || dbType === 'mariadb') return 'mysql-overview-dashboard.html';
+            if (dbType === 'postgres') return 'postgres-overview-dashboard.html';
+            return 'rdb-dashboard.html';
+        }
+
         // Load config and build tree
         fetch(`/api/config`)
             .then(res => res.json())
@@ -460,7 +468,16 @@ function getToken() {
                         
                         instLink.addEventListener('click', (e) => {
                             e.preventDefault();
-                            
+
+                            // Oracle 전용 탭 시스템(switchTab 이하 전부)으로 들어가지 않고 엔진별 경량
+                            // 대시보드로 보낸다 - MySQL/MariaDB/PostgreSQL 인스턴스는 이 사이드바를 갖지
+                            // 않는 독립 페이지에서 처리된다.
+                            const dbType = inst.db_type || 'oracle';
+                            if (dbType !== 'oracle') {
+                                window.location.href = `${rdbTargetPage(dbType)}?db_id=${encodeURIComponent(inst.id)}&db_type=${encodeURIComponent(dbType)}&name=${encodeURIComponent(inst.name || inst.id)}`;
+                                return;
+                            }
+
                             // Reset all links colors (unselected instances shown in blue, not muted gray)
                             document.querySelectorAll('.instance-item').forEach(el => {
                                 el.style.color = 'var(--primary)';
@@ -493,14 +510,25 @@ function getToken() {
                         instancesDiv.appendChild(instLink);
                         
                         // Auto-select: the requested db_id if one was given (jumpToDbId), otherwise
-                        // the first non-restricted instance across all groups. If db_id was given but
-                        // never matches (unknown id, or restricted for this account), nothing here
+                        // the first non-restricted Oracle instance across all groups (index.html's tab
+                        // system is Oracle-only, so a "no db_id" landing skips over mysql/mariadb/
+                        // postgres instances rather than auto-selecting one of them). If db_id was given
+                        // but never matches (unknown id, or restricted for this account), nothing here
                         // auto-selects - no silent fallback to "first", so a stale/bad link doesn't
                         // quietly land on the wrong DB.
+                        const instDbType = inst.db_type || 'oracle';
                         const shouldAutoSelect = jumpToDbId
                             ? (inst.id === jumpToDbId && !isRestricted)
-                            : (isFirstInstance && !isRestricted);
+                            : (isFirstInstance && !isRestricted && instDbType === 'oracle');
                         if (shouldAutoSelect) {
+                            // ?db_id=<mysql/mariadb/postgres 인스턴스>로 index.html에 직접 진입한 경우
+                            // (구 북마크, FO 라우팅 우회 등) - instLink.click()이 위 핸들러에서 어차피
+                            // 리다이렉트하지만, 사이드바 그룹을 여는 애니메이션 없이 즉시 넘어가도록 여기서도
+                            // 한 번 더 짧게 체크한다.
+                            if (instDbType !== 'oracle') {
+                                window.location.href = `${rdbTargetPage(instDbType)}?db_id=${encodeURIComponent(inst.id)}&db_type=${encodeURIComponent(instDbType)}&name=${encodeURIComponent(inst.name || inst.id)}`;
+                                return;
+                            }
                             isFirstInstance = false;
                             setTimeout(() => {
                                 groupHeader.click();
@@ -1028,13 +1056,27 @@ let layoutHTML = "";
                 const response = await fetch(`/api/tablespace?db_id=${window.currentDbId || ""}&token=${encodeURIComponent(getToken())}`);
                 if (response.ok) {
                     const data = await response.json();
+                    const tsTotalMbEl = document.getElementById('tablespace-total-mb');
+                    const tsUsedMbEl = document.getElementById('tablespace-used-mb');
+                    const tsTotalPctEl = document.getElementById('tablespace-total-pct');
+
                     if (data.error) {
                         tsTbody.innerHTML = `<tr><td colspan="6" style="color:#d03b3b; text-align:center; padding: 30px;">DB Error: ${data.error}</td></tr>`;
+                        if (tsTotalMbEl) tsTotalMbEl.textContent = '-- MB';
+                        if (tsUsedMbEl) tsUsedMbEl.textContent = '-- MB';
+                        if (tsTotalPctEl) tsTotalPctEl.textContent = '--%';
                     } else if (data.length === 0) {
                         tsTbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 30px;">테이블 스페이스 정보가 없습니다.</td></tr>';
+                        if (tsTotalMbEl) tsTotalMbEl.textContent = '0 MB';
+                        if (tsUsedMbEl) tsUsedMbEl.textContent = '0 MB';
+                        if (tsTotalPctEl) tsTotalPctEl.textContent = '0%';
                     } else {
                         tsTbody.innerHTML = '';
+                        let sumTotalMb = 0;
+                        let sumUsedMb = 0;
                         data.forEach(ts => {
+                            sumTotalMb += Number(ts.total_mb) || 0;
+                            sumUsedMb += Number(ts.used_mb) || 0;
                             const free = ts.free_mb;
                             const numPct = Number(ts.used_pct);
                             const displayPct = numPct.toFixed(1);
@@ -1064,6 +1106,9 @@ let layoutHTML = "";
                             `;
                             tsTbody.insertAdjacentHTML('beforeend', row);
                         });
+                        if (tsTotalMbEl) tsTotalMbEl.textContent = `${sumTotalMb.toLocaleString()} MB`;
+                        if (tsUsedMbEl) tsUsedMbEl.textContent = `${sumUsedMb.toLocaleString()} MB`;
+                        if (tsTotalPctEl) tsTotalPctEl.textContent = sumTotalMb > 0 ? `${((sumUsedMb / sumTotalMb) * 100).toFixed(1)}%` : '0%';
                     }
                 } else {
                     tsTbody.innerHTML = `<tr><td colspan="6" style="color:#d03b3b; text-align:center; padding: 30px;">API 서버 오류가 발생했습니다.</td></tr>`;

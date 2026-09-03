@@ -6,12 +6,14 @@ com\dbagent\auth\UserController.class
 com\dbagent\monitor\OracleQueryHelper.class
 com\dbagent\auth\CreateUserRequest.class
 com\dbagent\oracle\OracleConnectionPoolManager.class
+com\dbagent\rdb\RdbMonitorController.class
 com\dbagent\monitor\KillSessionRequest.class
 com\dbagent\query\SqlQueryRequest.class
 com\dbagent\sqltuning\SqlTuningController.class
 com\dbagent\monitor\MonitorController.class
 com\dbagent\oracle\TnsAdminInitializer.class
 com\dbagent\query\ExecutionPlanService.class
+com\dbagent\rdb\RdbConnectionPoolManager.class
 com\dbagent\sqltuning\SqlTuningRequest.class
 com\dbagent\auth\ChangePasswordRequest.class
 com\dbagent\oracle\ConfigController.class
@@ -21,7 +23,9 @@ com\dbagent\query\SqlQueryController.class
 com\dbagent\sqltuning\BindCaptureRequest.class
 com\dbagent\config\StaticResourceConfig.class
 com\dbagent\monitor\MonitorService.class
+com\dbagent\rdb\MySqlMonitorService.class
 com\dbagent\aidba\ChatRequest.class
+com\dbagent\rdb\PostgresMonitorService.class
 com\dbagent\sqltuning\SqlTuningAutoRequest.class
 com\dbagent\monitor\KillSessionRequest$SessionRef.class
 com\dbagent\aidba\AiDbaController.class
@@ -30,6 +34,7 @@ com\dbagent\sqltuning\SqlTuningService.class
 com\dbagent\DbAgentApplication.class
 com\dbagent\query\SqlQueryService.class
 com\dbagent\oracle\DatabaseConfigService.class
+com\dbagent\rdb\EngineMonitorService.class
 com\dbagent\oracle\TargetDbConfig.class
 com\dbagent\aidba\ErrorSearchService.class
 com\dbagent\auth\AuthService.class

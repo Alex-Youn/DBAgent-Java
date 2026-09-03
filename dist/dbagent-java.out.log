@@ -8,37 +8,62 @@
 
  :: Spring Boot ::                (v3.3.5)
 
-2026-08-30T20:14:13.511+09:00  INFO 30772 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 30772 (C:\AI-Projects\DBAgent-Java\dist\dbagent-java-0.1.0.jar started by À±¼­Áø in C:\AI-Projects\DBAgent-Java\dist)
-2026-08-30T20:14:13.515+09:00  INFO 30772 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
-2026-08-30T20:14:14.525+09:00  INFO 30772 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
-2026-08-30T20:14:14.532+09:00  INFO 30772 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
-2026-08-30T20:14:14.532+09:00  INFO 30772 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
-2026-08-30T20:14:14.559+09:00  INFO 30772 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
-2026-08-30T20:14:14.561+09:00  INFO 30772 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 978 ms
-2026-08-30T20:14:14.738+09:00  INFO 30772 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
-2026-08-30T20:14:14.943+09:00  INFO 30772 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@3f6f3cc
-2026-08-30T20:14:14.944+09:00  INFO 30772 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
-2026-08-30T20:14:15.023+09:00  INFO 30772 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
-2026-08-30T20:14:15.209+09:00  INFO 30772 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8006 (http) with context path '/'
-2026-08-30T20:14:15.223+09:00  INFO 30772 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 1.973 seconds (process running for 2.313)
-2026-08-30T20:14:17.713+09:00  INFO 30772 --- [nio-8006-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
-2026-08-30T20:14:17.714+09:00  INFO 30772 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
-2026-08-30T20:14:17.715+09:00  INFO 30772 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
-2026-08-30T20:14:22.349+09:00  INFO 30772 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Starting...
-2026-08-30T20:14:22.350+09:00  INFO 30772 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Starting...
-2026-08-30T20:14:22.351+09:00  INFO 30772 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Starting...
-2026-08-30T20:14:22.351+09:00  INFO 30772 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Start completed.
-2026-08-30T20:14:22.351+09:00  INFO 30772 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Starting...
-2026-08-30T20:14:22.351+09:00  INFO 30772 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Start completed.
-2026-08-30T20:14:22.352+09:00  INFO 30772 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Start completed.
-2026-08-30T20:14:22.352+09:00  INFO 30772 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Start completed.
-2026-08-30T20:14:22.352+09:00  INFO 30772 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Starting...
-2026-08-30T20:14:22.353+09:00  INFO 30772 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Starting...
-2026-08-30T20:14:22.354+09:00  INFO 30772 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Start completed.
-2026-08-30T20:14:22.354+09:00  INFO 30772 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-patent_etc_1 - Starting...
-2026-08-30T20:14:22.354+09:00  INFO 30772 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Start completed.
-2026-08-30T20:14:22.355+09:00  INFO 30772 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-patent_etc_2 - Starting...
-2026-08-30T20:14:22.355+09:00  INFO 30772 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-patent_etc_1 - Start completed.
-2026-08-30T20:14:22.356+09:00  INFO 30772 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-patent_etc_2 - Start completed.
-2026-08-30T20:14:25.846+09:00  INFO 30772 --- [nio-8006-exec-7] com.zaxxer.hikari.HikariDataSource       : oracle-default - Starting...
-2026-08-30T20:14:25.847+09:00  INFO 30772 --- [nio-8006-exec-7] com.zaxxer.hikari.HikariDataSource       : oracle-default - Start completed.
+2026-09-03T16:36:53.858+09:00  INFO 30276 --- [           main] com.dbagent.DbAgentApplication           : Starting DbAgentApplication v0.1.0 using Java 17.0.20 with PID 30276 (C:\AI-PROJECTS\DBAgent-Java\dist\dbagent-java-0.1.0.jar started by À±ÀÎ¼ö in C:\AI-PROJECTS\DBAgent-Java\dist)
+2026-09-03T16:36:53.863+09:00  INFO 30276 --- [           main] com.dbagent.DbAgentApplication           : No active profile set, falling back to 1 default profile: "default"
+2026-09-03T16:36:54.909+09:00  INFO 30276 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat initialized with port 8006 (http)
+2026-09-03T16:36:54.923+09:00  INFO 30276 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-09-03T16:36:54.924+09:00  INFO 30276 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/10.1.31]
+2026-09-03T16:36:54.978+09:00  INFO 30276 --- [           main] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring embedded WebApplicationContext
+2026-09-03T16:36:54.980+09:00  INFO 30276 --- [           main] w.s.c.ServletWebServerApplicationContext : Root WebApplicationContext: initialization completed in 1057 ms
+2026-09-03T16:36:55.290+09:00  INFO 30276 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-09-03T16:36:55.552+09:00  INFO 30276 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.sqlite.jdbc4.JDBC4Connection@5099c59b
+2026-09-03T16:36:55.555+09:00  INFO 30276 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-09-03T16:36:55.720+09:00  INFO 30276 --- [           main] o.s.b.a.w.s.WelcomePageHandlerMapping    : Adding welcome page: class path resource [static/index.html]
+2026-09-03T16:36:56.055+09:00  INFO 30276 --- [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8006 (http) with context path '/'
+2026-09-03T16:36:56.069+09:00  INFO 30276 --- [           main] com.dbagent.DbAgentApplication           : Started DbAgentApplication in 2.581 seconds (process running for 2.983)
+2026-09-03T16:37:02.498+09:00  INFO 30276 --- [nio-8006-exec-2] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-09-03T16:37:02.500+09:00  INFO 30276 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-09-03T16:37:02.502+09:00  INFO 30276 --- [nio-8006-exec-2] o.s.web.servlet.DispatcherServlet        : Completed initialization in 2 ms
+2026-09-03T16:37:07.369+09:00  INFO 30276 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Starting...
+2026-09-03T16:37:07.370+09:00  INFO 30276 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Starting...
+2026-09-03T16:37:07.370+09:00  INFO 30276 --- [pool-2-thread-1] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_1 - Start completed.
+2026-09-03T16:37:07.371+09:00  INFO 30276 --- [pool-2-thread-2] com.zaxxer.hikari.HikariDataSource       : oracle-patent_integ_2 - Start completed.
+2026-09-03T16:37:07.372+09:00  INFO 30276 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Starting...
+2026-09-03T16:37:07.373+09:00  INFO 30276 --- [pool-2-thread-3] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_1 - Start completed.
+2026-09-03T16:37:07.373+09:00  INFO 30276 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Starting...
+2026-09-03T16:37:07.374+09:00  INFO 30276 --- [pool-2-thread-4] com.zaxxer.hikari.HikariDataSource       : oracle-patent_search_2 - Start completed.
+2026-09-03T16:37:07.375+09:00  INFO 30276 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Starting...
+2026-09-03T16:37:07.376+09:00  INFO 30276 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Starting...
+2026-09-03T16:37:07.376+09:00  INFO 30276 --- [pool-2-thread-5] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_1 - Start completed.
+2026-09-03T16:37:07.377+09:00  INFO 30276 --- [pool-2-thread-6] com.zaxxer.hikari.HikariDataSource       : oracle-patent_portal_2 - Start completed.
+2026-09-03T16:37:07.377+09:00  INFO 30276 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Starting...
+2026-09-03T16:37:07.378+09:00  INFO 30276 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Starting...
+2026-09-03T16:37:07.380+09:00  INFO 30276 --- [pool-2-thread-7] com.zaxxer.hikari.HikariDataSource       : oracle-TEST01 - Start completed.
+2026-09-03T16:37:07.380+09:00  INFO 30276 --- [pool-2-thread-8] com.zaxxer.hikari.HikariDataSource       : oracle-TEST02 - Start completed.
+2026-09-03T16:37:07.386+09:00  INFO 30276 --- [ool-2-thread-11] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Starting...
+2026-09-03T16:37:07.386+09:00  INFO 30276 --- [pool-2-thread-9] com.zaxxer.hikari.HikariDataSource       : rdb-docker_mysql - Starting...
+2026-09-03T16:37:07.386+09:00  INFO 30276 --- [ool-2-thread-10] com.zaxxer.hikari.HikariDataSource       : rdb-docker_mariadb - Starting...
+2026-09-03T16:37:07.401+09:00  INFO 30276 --- [pool-2-thread-9] com.zaxxer.hikari.HikariDataSource       : rdb-docker_mysql - Start completed.
+2026-09-03T16:37:07.402+09:00  INFO 30276 --- [ool-2-thread-10] com.zaxxer.hikari.HikariDataSource       : rdb-docker_mariadb - Start completed.
+2026-09-03T16:37:07.420+09:00  INFO 30276 --- [ool-2-thread-11] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Start completed.
+2026-09-03T16:37:12.394+09:00  WARN 30276 --- [pool-2-thread-3] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_1 after 5023ms: java.sql.SQLTransientConnectionException: oracle-patent_search_1 - Connection is not available, request timed out after 5010ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:37:12.394+09:00  WARN 30276 --- [pool-2-thread-5] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_1 after 5020ms: java.sql.SQLTransientConnectionException: oracle-patent_portal_1 - Connection is not available, request timed out after 5007ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:37:12.394+09:00  WARN 30276 --- [pool-2-thread-4] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_2 after 5021ms: java.sql.SQLTransientConnectionException: oracle-patent_search_2 - Connection is not available, request timed out after 5008ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:37:12.394+09:00  WARN 30276 --- [pool-2-thread-6] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_2 after 5019ms: java.sql.SQLTransientConnectionException: oracle-patent_portal_2 - Connection is not available, request timed out after 5006ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:38:00.301+09:00  INFO 30276 --- [nio-8006-exec-3] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Shutdown initiated...
+2026-09-03T16:38:00.303+09:00  INFO 30276 --- [nio-8006-exec-3] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Shutdown completed.
+2026-09-03T16:38:00.518+09:00  INFO 30276 --- [nio-8006-exec-8] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Starting...
+2026-09-03T16:38:00.519+09:00  INFO 30276 --- [nio-8006-exec-8] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Start completed.
+2026-09-03T16:38:12.665+09:00  INFO 30276 --- [nio-8006-exec-4] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Shutdown initiated...
+2026-09-03T16:38:14.666+09:00  WARN 30276 --- [nio-8006-exec-4] com.zaxxer.hikari.pool.HikariPool        : Timed-out waiting for add connection executor to shutdown
+2026-09-03T16:38:14.669+09:00  INFO 30276 --- [nio-8006-exec-4] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Shutdown completed.
+2026-09-03T16:38:14.844+09:00  INFO 30276 --- [nio-8006-exec-7] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Starting...
+2026-09-03T16:38:14.844+09:00  INFO 30276 --- [nio-8006-exec-7] com.zaxxer.hikari.HikariDataSource       : rdb-docker_postgres - Start completed.
+2026-09-03T16:39:03.300+09:00  WARN 30276 --- [ool-2-thread-16] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_1 after 5000ms: java.sql.SQLTransientConnectionException: oracle-patent_portal_1 - Connection is not available, request timed out after 5000ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:39:03.300+09:00  WARN 30276 --- [ool-2-thread-15] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_2 after 5000ms: java.sql.SQLTransientConnectionException: oracle-patent_search_2 - Connection is not available, request timed out after 5000ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:39:03.300+09:00  WARN 30276 --- [ool-2-thread-14] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_1 after 5001ms: java.sql.SQLTransientConnectionException: oracle-patent_search_1 - Connection is not available, request timed out after 5000ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:39:03.301+09:00  WARN 30276 --- [ool-2-thread-17] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_2 after 5000ms: java.sql.SQLTransientConnectionException: oracle-patent_portal_2 - Connection is not available, request timed out after 5000ms (total=0, active=0, idle=0, waiting=0)
+2026-09-03T16:39:03.694+09:00  WARN 30276 --- [ool-2-thread-15] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_1 after 0ms: java.sql.SQLException: Connection failed recently. Waiting for cooldown.
+2026-09-03T16:39:03.694+09:00  WARN 30276 --- [ool-2-thread-16] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_search_2 after 0ms: java.sql.SQLException: Connection failed recently. Waiting for cooldown.
+2026-09-03T16:39:03.695+09:00  WARN 30276 --- [ool-2-thread-15] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_1 after 0ms: java.sql.SQLException: Connection failed recently. Waiting for cooldown.
+2026-09-03T16:39:03.695+09:00  WARN 30276 --- [ool-2-thread-15] com.dbagent.monitor.MonitorService       : fleet_status failed for db_id=patent_portal_2 after 0ms: java.sql.SQLException: Connection failed recently. Waiting for cooldown.

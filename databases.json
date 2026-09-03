@@ -9,8 +9,8 @@
       "sid" : "ORCL",
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : 8,
-      "pool_max_size" : 12,
+      "pool_min_idle" : null,
+      "pool_max_size" : null,
       "session_thresholds" : [ 80, 90, 100, 110, 120 ],
       "accounts" : [ {
         "user" : "apdba",
@@ -25,8 +25,7 @@
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : null,
-      "pool_max_size" : null,
-      "session_thresholds" : [ 80, 90, 100, 110, 120 ]
+      "pool_max_size" : null
     } ]
   }, {
     "group_name" : "특허넷 검색DB",
@@ -35,9 +34,9 @@
       "name" : "검색DB #1",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL3",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
+      "sid" : "SRCH1",
+      "user" : "system",
+      "password" : "B64(c3lz)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     }, {
@@ -45,9 +44,9 @@
       "name" : "검색DB #2",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL4",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
+      "sid" : "SRCH2",
+      "user" : "system",
+      "password" : "B64(c3lz)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
@@ -58,9 +57,9 @@
       "name" : "포탈 #1",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL5",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
+      "sid" : "PORT1",
+      "user" : "system",
+      "password" : "B64(c3lz)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     }, {
@@ -68,54 +67,78 @@
       "name" : "포탈 #2",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL6",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
+      "sid" : "PORT2",
+      "user" : "system",
+      "password" : "B64(c3lz)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
   }, {
-    "group_name" : "특허업무 기타",
+    "group_name" : "TEST",
     "instances" : [ {
-      "id" : "patent_etc_1",
-      "name" : "기타 #1",
+      "id" : "TEST01",
+      "name" : "TEST_DB",
       "host" : "",
-      "port" : 1521,
-      "sid" : "ORCL7",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : null,
-      "pool_max_size" : null
-    }, {
-      "id" : "patent_etc_2",
-      "name" : "기타 #2",
-      "host" : "",
-      "port" : 1521,
-      "sid" : "ORCL8",
-      "user" : "dbagent_user",
-      "password" : "B64(ZGJhZ2VudDAx)",
-      "pool_min_idle" : null,
-      "pool_max_size" : null
-    }, {
-      "id" : "ORCL9_ID",
-      "name" : "ORCL9",
-      "host" : "",
-      "port" : 1521,
-      "sid" : "ORCL9",
+      "port" : 1522,
+      "sid" : "ORCL3",
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : 2,
-      "pool_max_size" : 9
+      "pool_max_size" : 10,
+      "accounts" : [ {
+        "user" : "apdba",
+        "password" : "B64(YXBkYmE=)"
+      } ]
     }, {
-      "id" : "ORCL10_ID",
-      "name" : "ORCL10",
+      "id" : "TEST02",
+      "name" : "TEST_DB01",
       "host" : "",
       "port" : 1521,
-      "sid" : "ORCL10",
+      "sid" : "ORCL4",
       "user" : "dbagent_user",
       "password" : "B64(ZGJhZ2VudDAx)",
       "pool_min_idle" : 2,
-      "pool_max_size" : 6
+      "pool_max_size" : 4,
+      "accounts" : [ {
+        "user" : "apdba",
+        "password" : "B64(YXBkYmEwMQ==)"
+      } ]
+    } ]
+  }, {
+    "group_name" : "테스트 DB (Docker)",
+    "instances" : [ {
+      "id" : "docker_mysql",
+      "name" : "MySQL (Docker)",
+      "db_type" : "mysql",
+      "host" : "127.0.0.1",
+      "port" : 3307,
+      "sid" : "testdb",
+      "user" : "root",
+      "password" : "B64(dGVzdA==)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
+    }, {
+      "id" : "docker_mariadb",
+      "name" : "MariaDB (Docker)",
+      "db_type" : "mariadb",
+      "host" : "127.0.0.1",
+      "port" : 3306,
+      "sid" : "testdb",
+      "user" : "root",
+      "password" : "B64(dGVzdA==)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
+    }, {
+      "id" : "docker_postgres",
+      "name" : "PostgreSQL (Docker)",
+      "db_type" : "postgres",
+      "host" : "127.0.0.1",
+      "port" : 5432,
+      "sid" : "testdb",
+      "user" : "postgres",
+      "password" : "B64(dGVzdA==)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
     } ]
   } ]
 }

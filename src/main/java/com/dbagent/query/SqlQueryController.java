@@ -38,8 +38,11 @@ public class SqlQueryController {
         if (req.sql() == null || req.sql().isBlank()) {
             return ResponseEntity.ok(Map.of("success", false, "message", "실행할 SQL을 입력하세요."));
         }
+        TargetDbConfig target = configService.resolve(req.dbId(), req.account());
+        if (target == null) {
+            return ResponseEntity.ok(Map.of("success", false, "message", "등록되지 않은 DB입니다."));
+        }
         try {
-            TargetDbConfig target = configService.resolve(req.dbId(), req.account());
             return ResponseEntity.ok(queryService.execute(target, req.sql(), req.maxRows()));
         } catch (SQLException e) {
             return ResponseEntity.ok(Map.of("success", false, "message", e.getMessage()));

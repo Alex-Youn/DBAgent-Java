@@ -9,6 +9,8 @@ import java.util.Map;
 public record UpdateDbInstanceRequest(
         String token,
         String name,
+        // "oracle" (default) / "mysql" / "mariadb" / "postgres" - see TargetDbConfig.
+        @JsonProperty("db_type") String dbType,
         String host,
         int port,
         String sid,
