@@ -3,6 +3,7 @@ package com.dbagent.monitor;
 import com.dbagent.auth.AuthService;
 import com.dbagent.oracle.DatabaseConfigService;
 import com.dbagent.oracle.TargetDbConfig;
+import com.dbagent.rdb.MsSqlMonitorService;
 import com.dbagent.rdb.MySqlMonitorService;
 import com.dbagent.rdb.PostgresMonitorService;
 import org.slf4j.Logger;
@@ -39,14 +40,17 @@ public class MonitorController {
     private final AuthService authService;
     private final MySqlMonitorService mySqlMonitorService;
     private final PostgresMonitorService postgresMonitorService;
+    private final MsSqlMonitorService msSqlMonitorService;
 
     public MonitorController(MonitorService monitorService, DatabaseConfigService configService, AuthService authService,
-            MySqlMonitorService mySqlMonitorService, PostgresMonitorService postgresMonitorService) {
+            MySqlMonitorService mySqlMonitorService, PostgresMonitorService postgresMonitorService,
+            MsSqlMonitorService msSqlMonitorService) {
         this.monitorService = monitorService;
         this.configService = configService;
         this.authService = authService;
         this.mySqlMonitorService = mySqlMonitorService;
         this.postgresMonitorService = postgresMonitorService;
+        this.msSqlMonitorService = msSqlMonitorService;
     }
 
     @GetMapping("/tmlock")
@@ -222,6 +226,9 @@ public class MonitorController {
         }
         if ("postgres".equals(dbType)) {
             return postgresMonitorService.getFleetStatus(inst);
+        }
+        if ("mssql".equals(dbType)) {
+            return msSqlMonitorService.getFleetStatus(inst);
         }
         return mySqlMonitorService.getFleetStatus(inst);
     }

@@ -58,6 +58,13 @@
             <version>42.7.4</version>
         </dependency>
 
+        <!-- MS SQL Server JDBC driver -->
+        <dependency>
+            <groupId>com.microsoft.sqlserver</groupId>
+            <artifactId>mssql-jdbc</artifactId>
+            <version>12.8.1.jre11</version>
+        </dependency>
+
         <!-- Password hashing (replaces werkzeug.security) -->
         <dependency>
             <groupId>org.springframework.security</groupId>

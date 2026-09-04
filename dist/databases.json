@@ -108,10 +108,10 @@
       } ]
     } ]
   }, {
-    "group_name" : "테스트 DB (Docker)",
+    "group_name" : "MySQL",
     "instances" : [ {
       "id" : "docker_mysql",
-      "name" : "MySQL (Docker)",
+      "name" : "MySQL(docker)",
       "db_type" : "mysql",
       "host" : "127.0.0.1",
       "port" : 3307,
@@ -120,9 +120,12 @@
       "password" : "B64(dGVzdA==)",
       "pool_min_idle" : null,
       "pool_max_size" : null
-    }, {
+    } ]
+  }, {
+    "group_name" : "MariaDB",
+    "instances" : [ {
       "id" : "docker_mariadb",
-      "name" : "MariaDB (Docker)",
+      "name" : "MariaDB(docker)",
       "db_type" : "mariadb",
       "host" : "127.0.0.1",
       "port" : 3306,
@@ -131,15 +134,32 @@
       "password" : "B64(dGVzdA==)",
       "pool_min_idle" : null,
       "pool_max_size" : null
-    }, {
+    } ]
+  }, {
+    "group_name" : "PostgreSQL",
+    "instances" : [ {
       "id" : "docker_postgres",
-      "name" : "PostgreSQL (Docker)",
+      "name" : "PostgreSQL(docker)",
       "db_type" : "postgres",
       "host" : "127.0.0.1",
       "port" : 5432,
       "sid" : "testdb",
       "user" : "postgres",
       "password" : "B64(dGVzdA==)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
+    } ]
+  }, {
+    "group_name" : "MS SQL Server",
+    "instances" : [ {
+      "id" : "docker_mssql",
+      "name" : "MsSQL(docker)",
+      "db_type" : "mssql",
+      "host" : "127.0.0.1",
+      "port" : 1433,
+      "sid" : "master",
+      "user" : "sa",
+      "password" : "B64(VGVzdDEyMzQh)",
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
