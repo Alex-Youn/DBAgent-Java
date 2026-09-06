@@ -3,6 +3,7 @@ package com.dbagent.monitor;
 import com.dbagent.auth.AuthService;
 import com.dbagent.oracle.DatabaseConfigService;
 import com.dbagent.oracle.TargetDbConfig;
+import com.dbagent.rdb.CubridMonitorService;
 import com.dbagent.rdb.MsSqlMonitorService;
 import com.dbagent.rdb.MySqlMonitorService;
 import com.dbagent.rdb.PostgresMonitorService;
@@ -41,16 +42,18 @@ public class MonitorController {
     private final MySqlMonitorService mySqlMonitorService;
     private final PostgresMonitorService postgresMonitorService;
     private final MsSqlMonitorService msSqlMonitorService;
+    private final CubridMonitorService cubridMonitorService;
 
     public MonitorController(MonitorService monitorService, DatabaseConfigService configService, AuthService authService,
             MySqlMonitorService mySqlMonitorService, PostgresMonitorService postgresMonitorService,
-            MsSqlMonitorService msSqlMonitorService) {
+            MsSqlMonitorService msSqlMonitorService, CubridMonitorService cubridMonitorService) {
         this.monitorService = monitorService;
         this.configService = configService;
         this.authService = authService;
         this.mySqlMonitorService = mySqlMonitorService;
         this.postgresMonitorService = postgresMonitorService;
         this.msSqlMonitorService = msSqlMonitorService;
+        this.cubridMonitorService = cubridMonitorService;
     }
 
     @GetMapping("/tmlock")
@@ -229,6 +232,9 @@ public class MonitorController {
         }
         if ("mssql".equals(dbType)) {
             return msSqlMonitorService.getFleetStatus(inst);
+        }
+        if ("cubrid".equals(dbType)) {
+            return cubridMonitorService.getFleetStatus(inst);
         }
         return mySqlMonitorService.getFleetStatus(inst);
     }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MS SQL Server Overview</title>
+<title>CUBRID Overview</title>
 <script src="lib/lucide.js"></script>
 <script src="dbagent-common.js?v=7"></script>
 <script src="rdb-session-views.js?v=6"></script>
@@ -325,6 +325,19 @@
         background: #33343b; border-radius: 3px; overflow: hidden;
     }
     .kpi-card .kpi-gauge-fill { height: 100%; background: var(--orange); width: 90%; }
+    /* KPI 카드 아래 한 줄 보조 설명(원시값 등). 게이지가 있는 카드는 게이지에 자리를 내주려고
+       더 아래에서 시작한다. */
+    .kpi-card .kpi-sub { position: absolute; left: 12px; right: 12px; bottom: 2px; font-size: 11px; color: var(--text-muted); }
+    .kpi-card .kpi-gauge-track ~ .kpi-sub { bottom: 0; }
+
+    /* CUBRID 는 다른 엔진이 주는 정보 일부(SQL 원문 등)를 구조적으로 제공하지 않는다.
+       화면에 값이 비는 이유를 밝히지 않으면 조회 실패로 오해하므로 상단에 상시 노출한다. */
+    .engine-note {
+        margin: 0 0 16px; padding: 10px 12px; border-radius: 6px;
+        background: rgba(122, 162, 247, .08); border: 1px solid rgba(122, 162, 247, .25);
+        color: var(--text-muted); font-size: 12px; line-height: 1.7;
+    }
+    .engine-note b { color: var(--text); font-weight: 600; }
 
     /* ---------- Accordion metric-group rows ---------- */
     .metric-row {
@@ -375,6 +388,35 @@
     /* ---------- Detail view (real-data time-series+legend panels) ---------- */
     .detail-row-title { font-weight: 600; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; }
     .detail-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 12px; }
+
+    /* ---------- CUBRID DASHBOARD 패널 (시계열 차트 대신 현재 상태 표/목록) ---------- */
+    .detail-slot {
+        background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;
+        padding: 12px 14px; min-height: 60px; font-size: 12px; color: var(--text-muted);
+    }
+    .metric-list { display: flex; flex-direction: column; gap: 2px; }
+    .metric-list-row {
+        display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+        padding: 4px 0; border-bottom: 1px dashed var(--border);
+    }
+    .metric-list-row:last-child { border-bottom: none; }
+    .metric-list-key { color: var(--text-muted); }
+    .metric-list-val { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+
+    /* 볼륨 경로처럼 긴 값이 들어가므로 표는 가로로만 스크롤시킨다(페이지 본문이 밀리지 않게). */
+    .cub-table-wrap { overflow-x: auto; }
+    .cub-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .cub-table th, .cub-table td {
+        padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    .cub-table th { color: var(--text-muted); font-weight: 600; }
+    .cub-table td { color: var(--text); font-variant-numeric: tabular-nums; }
+    .cub-table tbody tr:last-child td { border-bottom: none; }
+    /* 사용률 막대 - 용량 조회 탭과 같은 임계값(75% 주황 / 90% 빨강)을 쓴다. */
+    .cub-bar-track { margin-top: 3px; height: 5px; background: #33343b; border-radius: 3px; overflow: hidden; min-width: 60px; }
+    .cub-bar-fill { height: 100%; background: var(--green); }
+    .cub-bar-fill.warn { background: var(--orange); }
+    .cub-bar-fill.danger { background: var(--red, #e5534b); }
     .ts-panel {
         background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; padding: 8px calc(10px + 0.5cm) 4px;
     }
@@ -417,7 +459,7 @@
     <div class="pmm-main">
         <header class="pmm-header">
             <div class="pmm-title" id="pmmTitleWrap" title="다른 DB 인스턴스로 전환">
-                <span id="pmmTitle">MS SQL Server Overview</span>
+                <span id="pmmTitle">CUBRID Overview</span>
                 <i data-lucide="chevron-down" class="caret"></i>
                 <div id="pmmTitleDropdown" class="title-dropdown"></div>
             </div>
@@ -466,75 +508,57 @@
         </div>
 
         <main class="pmm-content">
+            <!-- Lock Holder/Waiter 탭이 없다. CUBRID 는 대기 세션을 막고 있는 holder 를 JDBC 로
+                 알아낼 방법이 없어(CubridMonitorService 클래스 주석) 트리가 성립하지 않는다.
+                 버튼을 두지 않으면 rdb-session-views.js 의 visibleTabs()/showView() 가 알아서
+                 건너뛰므로, 그 파일에 엔진 분기를 넣을 필요가 없다. 대기 정보는 세션 리스트의
+                 '대기 이벤트' 칸에 그대로 나온다. -->
             <div class="view-tabs">
                 <button type="button" class="view-tab active" id="tabDetailBtn" data-view="detail"><i data-lucide="layout-dashboard"></i>DASHBOARD</button>
                 <button type="button" class="view-tab" id="tabSessionsBtn" data-view="sessions"><i data-lucide="list"></i>세션 리스트</button>
-                <button type="button" class="view-tab" id="tabLocksBtn" data-view="locks"><i data-lucide="lock"></i>Lock Holder/Waiter</button>
                 <button type="button" class="view-tab" id="tabCapacityBtn" data-view="capacity"><i data-lucide="hard-drive"></i>용량 조회</button>
             </div>
 
-            <div id="overviewView" style="display:none;">
-                <div class="kpi-toggle-row" id="kpiToggle">
-                    <i data-lucide="chevron-down"></i>
-                </div>
-                <div class="kpi-row" id="kpiRow">
-                    <div class="kpi-card">
-                        <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">SQL Server Uptime <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value green" id="kpiUptime">불러오는 중...</div>
-                    </div>
-                    <div class="kpi-card">
-                        <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Batch Requests/sec <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value white" id="kpiQps">불러오는 중...</div>
-                    </div>
-                    <div class="kpi-card">
-                        <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Buffer Pool Size <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value white" id="kpiBufferPool">불러오는 중...</div>
-                    </div>
-                    <div class="kpi-card">
-                        <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Buffer Cache Hit Rate <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value orange" id="kpiHitRate">불러오는 중...</div>
-                        <div class="kpi-gauge-track"><div class="kpi-gauge-fill" id="kpiHitRateGauge" style="width:0;"></div></div>
-                    </div>
-                </div>
-
-                <div id="metricRows"></div>
-            </div>
-
+            <!-- 다른 세 대시보드와 달리 KPI 카드를 한 벌만 둔다. 그쪽은 display:none 으로 죽어 있는
+                 overviewView 안에 kpiUptime/kpiUptime2 처럼 id 만 다른 중복 카드가 남아 있는데
+                 (2026-09-04 Detail 탭 제거의 잔재), 새로 만드는 이 화면까지 그 부채를 물려받을
+                 이유가 없다. -->
             <div id="detailView">
                 <div class="kpi-row" id="kpiRowDetail">
                     <div class="kpi-card">
                         <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">SQL Server Uptime <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value green" id="kpiUptime2">불러오는 중...</div>
+                        <div class="kpi-title">활성 세션 <span class="live-badge">LIVE</span></div>
+                        <div class="kpi-value green" id="kpiActiveSessions">불러오는 중...</div>
+                        <div class="kpi-sub" id="kpiActiveSessionsSub">&nbsp;</div>
                     </div>
                     <div class="kpi-card">
                         <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Batch Requests/sec <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value white" id="kpiQps2">불러오는 중...</div>
+                        <div class="kpi-title">락 대기 세션 <span class="live-badge">LIVE</span></div>
+                        <div class="kpi-value white" id="kpiLockWaits">불러오는 중...</div>
+                        <div class="kpi-sub" id="kpiLockWaitsSub">&nbsp;</div>
                     </div>
                     <div class="kpi-card">
                         <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Buffer Pool Size <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value white" id="kpiBufferPool2">불러오는 중...</div>
+                        <div class="kpi-title">워커 스레드 사용률 <span class="live-badge">LIVE</span></div>
+                        <div class="kpi-value white" id="kpiWorker">불러오는 중...</div>
+                        <div class="kpi-gauge-track"><div class="kpi-gauge-fill" id="kpiWorkerGauge" style="width:0;"></div></div>
+                        <div class="kpi-sub" id="kpiWorkerSub">&nbsp;</div>
                     </div>
                     <div class="kpi-card">
                         <i data-lucide="info" class="info-icon"></i>
-                        <div class="kpi-title">Buffer Cache Hit Rate <span class="live-badge">LIVE</span></div>
-                        <div class="kpi-value orange" id="kpiHitRate2">불러오는 중...</div>
-                        <div class="kpi-gauge-track"><div class="kpi-gauge-fill" id="kpiHitRateGauge2" style="width:0;"></div></div>
+                        <div class="kpi-title">볼륨 사용률 (영구) <span class="live-badge">LIVE</span></div>
+                        <div class="kpi-value orange" id="kpiVolume">불러오는 중...</div>
+                        <div class="kpi-gauge-track"><div class="kpi-gauge-fill" id="kpiVolumeGauge" style="width:0;"></div></div>
+                        <div class="kpi-sub" id="kpiVolumeSub">&nbsp;</div>
                     </div>
                 </div>
+                <div class="engine-note" id="engineNote"></div>
                 <div id="detailRows"></div>
             </div>
 
-            <!-- 세션 리스트 / Lock 모니터링 탭의 본문. 표·모달·CSS 는 rdb-session-views.js 가 만들어 넣는다
-                 (세 대시보드에 같은 마크업을 복사하지 않기 위함 - 그 파일 머리말 참고). -->
+            <!-- 세션 리스트 / 용량 조회 탭의 본문. 표·모달·CSS 는 rdb-session-views.js 가 만들어 넣는다
+                 (네 대시보드에 같은 마크업을 복사하지 않기 위함 - 그 파일 머리말 참고). -->
             <div id="sessionsView" style="display:none;"></div>
-            <div id="locksView" style="display:none;"></div>
             <div id="capacityView" style="display:none;"></div>
         </main>
     </div>
@@ -556,7 +580,7 @@
     const dbId = qs.get('db_id');
     function getToken() { return sessionStorage.getItem('dbagent_token') || ''; }
     if (instanceName) {
-        document.title = `${instanceName} - MS SQL Server Overview`;
+        document.title = `${instanceName} - CUBRID Overview`;
         document.getElementById('pmmTitle').textContent = instanceName;
     }
 
@@ -636,325 +660,113 @@
         });
     })();
 
-    // Every row except "System Charts" is wired to real data (see /api/rdb/storage, /api/rdb/sessions,
-    // /api/rdb/mssql_status - RdbMonitorController/MsSqlMonitorService). System Charts (CPU/Memory/
-    // Disk IO/Network/Load/Swap) stays a placeholder mockup - OS-level host metrics have no SQL source.
-    const ROWS = [
-        { title: 'Storage Usage', panels: ['데이터베이스별 사용량'], live: 'storage' },
-        { title: 'Connections', panels: ['Connection Count', 'Sessions & Requests'], live: 'connections' },
-        { title: 'Batch Activity', panels: ['Batch Requests / Compilations'], live: 'batchActivity' },
-        { title: 'Locks', panels: ['SQL Server Lock Waits'], live: 'locks' },
-        { title: 'Wait Stats', panels: ['Top Wait Types'], live: 'waitStats' },
-        { title: 'Memory', panels: ['Buffer / Server Memory'], live: 'memory' },
-        { title: 'TempDB', panels: ['TempDB Data/Log 사용량'], live: 'tempdb' },
-        { title: 'I/O Stats', panels: ['Virtual File I/O 통계'], live: 'io' },
-        { title: 'System Charts', panels: ['CPU Usage', 'Memory', 'Disk IO', 'Network Traffic', 'Load Average', 'Swap'] }
-    ];
+    // =====================================================================================
+    // CUBRID DASHBOARD 탭 본문.
+    //
+    // 다른 세 대시보드는 서버의 누적 통계 카운터(QPS, 버퍼 적중률 등)로 시계열 패널을 그리지만,
+    // CUBRID 는 그 통계가 기본 구성에서 전부 0 이라 쓸 수 없다(SHOW EXEC STATISTICS / statdump 모두
+    // 0 - CubridMonitorService 클래스 주석 참고). 그래서 시계열 차트 대신 **지금 이 순간의 서버
+    // 상태**를 표로 보여준다. 없는 값을 그럴듯한 그래프로 채우는 것보다 이쪽이 정직하고, DBA 가
+    // 대시보드에서 먼저 확인하는 것도 "지금 몇 세션이 붙어 있고 무엇이 막혀 있나" 이다.
+    // =====================================================================================
 
-    // Deterministic placeholder sparkline generator - not real metrics, purely decorative sample data.
-    function sparklinePath(seed, width, height, area) {
-        const points = 40;
-        let d = '';
-        let areaD = '';
-        for (let i = 0; i < points; i++) {
-            const x = (i / (points - 1)) * width;
-            const y = height * (0.5 - 0.38 * Math.sin(i * 0.35 + seed) * Math.cos(i * 0.12 + seed * 2) - 0.08 * Math.sin(i * 0.9 + seed));
-            d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
-        }
-        if (area) {
-            areaD = d + `L${width},${height} L0,${height} Z`;
-        }
-        return { line: d.trim(), area: areaD };
+    const NOTE_HTML =
+        '<b>CUBRID는 다른 엔진과 제공 범위가 다릅니다.</b> ' +
+        '실행 중인 <b>SQL 원문</b>과 락을 <b>막고 있는 세션(holder)</b>은 CUBRID가 JDBC로 제공하지 않아 ' +
+        '이 화면에 표시할 수 없습니다(DB 서버에서 <code>cubrid killtran -q &lt;db&gt;</code> 로만 확인 가능). ' +
+        '그래서 Lock Holder/Waiter 탭이 없고, 세션 리스트의 SQL 칸은 항상 &quot;-&quot; 입니다 — ' +
+        '조회 실패가 아닙니다. 대기 중인 세션은 세션 리스트의 <b>대기 이벤트</b> 칸에 표시됩니다. ' +
+        '가동 시간·QPS·버퍼 적중률도 CUBRID가 SQL로 노출하지 않아 제공하지 않습니다. ' +
+        '접속 호스트/프로그램이 <code>broker1_cub_cas_*</code> 로 보이는 것은 정상입니다 — ' +
+        '클라이언트가 브로커(CAS)를 거쳐 접속하므로 서버는 CAS 프로세스를 클라이언트로 인식합니다.';
+    document.getElementById('engineNote').innerHTML = NOTE_HTML;
+
+    /** 숫자를 천단위 구분해서. null/undefined 는 '-'. */
+    function num(v) {
+        if (v === null || v === undefined) return '-';
+        return typeof v === 'number' ? v.toLocaleString() : String(v);
     }
 
-    function renderSparkline(container, seed, color, filled) {
-        const width = container.clientWidth || 200;
-        const height = container.clientHeight || 34;
-        const { line, area } = sparklinePath(seed, width, height, filled);
-        const svgNS = 'http://www.w3.org/2000/svg';
-        const svg = document.createElementNS(svgNS, 'svg');
-        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-        svg.style.width = '100%';
-        svg.style.height = '100%';
-        if (filled) {
-            const gradId = 'grad-' + Math.random().toString(36).slice(2);
-            const defs = document.createElementNS(svgNS, 'defs');
-            const grad = document.createElementNS(svgNS, 'linearGradient');
-            grad.setAttribute('id', gradId);
-            grad.setAttribute('x1', '0'); grad.setAttribute('y1', '0');
-            grad.setAttribute('x2', '0'); grad.setAttribute('y2', '1');
-            grad.innerHTML = `<stop offset="0%" stop-color="${color}" stop-opacity="0.45"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/>`;
-            defs.appendChild(grad);
-            svg.appendChild(defs);
-            const areaPath = document.createElementNS(svgNS, 'path');
-            areaPath.setAttribute('d', area);
-            areaPath.setAttribute('fill', `url(#${gradId})`);
-            svg.appendChild(areaPath);
-        }
-        const linePath = document.createElementNS(svgNS, 'path');
-        linePath.setAttribute('d', line);
-        linePath.setAttribute('fill', 'none');
-        linePath.setAttribute('stroke', color);
-        linePath.setAttribute('stroke-width', '1.5');
-        svg.appendChild(linePath);
-        container.innerHTML = '';
-        container.appendChild(svg);
-    }
-
-    // Build the accordion rows (8 wired to real data, 1 - System Charts - stays a mockup).
-    const mount = document.getElementById('metricRows');
-    let seedCounter = 10;
-    const liveHolders = {}; // row.live -> [chartHolder, ...] in panel order, for the fetch functions below.
-    const AUTO_OPEN = new Set(['storage', 'connections']);
-    ROWS.forEach(row => {
-        const details = document.createElement('details');
-        details.className = 'metric-row';
-        if (AUTO_OPEN.has(row.live)) details.open = true;
-
-        const summary = document.createElement('summary');
-        summary.innerHTML = `
-            <i data-lucide="chevron-right" class="chevron"></i>
-            <span class="row-title">${row.title}</span>
-            <span class="panel-count">(${row.panels.length} panel${row.panels.length > 1 ? 's' : ''})</span>
-            ${row.live ? '<span class="live-badge">LIVE</span>' : ''}
-            <i data-lucide="grip-vertical" class="grip"></i>
-        `;
-        details.appendChild(summary);
-
-        const body = document.createElement('div');
-        body.className = 'row-body';
-        row.panels.forEach(panelTitle => {
-            const panel = document.createElement('div');
-            panel.className = 'metric-panel';
-            const chartHolder = document.createElement('div');
-            panel.innerHTML = `<div class="panel-title">${panelTitle}</div>`;
-            panel.appendChild(chartHolder);
-            body.appendChild(panel);
-            if (row.live) {
-                chartHolder.innerHTML = dbId ? '불러오는 중...' : '<span class="live-error">db_id 없음</span>';
-                (liveHolders[row.live] = liveHolders[row.live] || []).push(chartHolder);
-                return;
-            }
-            seedCounter += 1;
-            details.addEventListener('toggle', function onToggle() {
-                if (details.open) {
-                    renderSparkline(chartHolder, seedCounter, '#5794f2', true);
-                }
-            });
-        });
-        details.appendChild(body);
-        mount.appendChild(details);
-    });
-
-    // ---- Real data: Storage Usage (/api/rdb/storage) ----
-    function loadStorage() {
-        const el = liveHolders.storage && liveHolders.storage[0];
-        if (!el || !dbId) return;
-        fetch(`/api/rdb/storage?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) { el.innerHTML = `<span class="live-error">DB Error: ${data.error}</span>`; return; }
-                if (!data.length) { el.innerHTML = '스토리지 정보가 없습니다.'; return; }
-                let sumTotal = 0, sumUsed = 0;
-                const rows = data.map(t => {
-                    sumTotal += Number(t.total_mb) || 0;
-                    sumUsed += Number(t.used_mb) || 0;
-                    return `<tr><td>${t.tablespace_name}</td><td>${t.status}</td><td>${Number(t.used_mb).toLocaleString()}</td></tr>`;
-                }).join('');
-                el.innerHTML = `
-                    <div class="live-summary">
-                        <span>전체 할당량: <strong>${sumTotal.toLocaleString()} MB</strong></span>
-                        <span>전체 사용량: <strong>${sumUsed.toLocaleString()} MB</strong></span>
-                        <span>전체 사용률: <strong>${sumTotal > 0 ? ((sumUsed / sumTotal) * 100).toFixed(1) : 0}%</strong></span>
-                    </div>
-                    <table class="live-table">
-                        <thead><tr><th>데이터베이스</th><th>상태</th><th>사용량 (MB)</th></tr></thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                `;
-            })
-            .catch(err => { el.innerHTML = `<span class="live-error">${err.message}</span>`; });
-    }
-
-    // ---- Real data: Connections (/api/rdb/sessions) ----
-    function loadConnections() {
-        const holders = liveHolders.connections;
-        if (!holders || !dbId) return;
-        const [countEl, listEl] = holders;
-        fetch(`/api/rdb/sessions?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.error) {
-                    countEl.innerHTML = `<span class="live-error">DB Error</span>`;
-                    listEl.innerHTML = `<span class="live-error">${data.error}</span>`;
-                    return;
-                }
-                countEl.innerHTML = `<div class="live-count">${data.length}</div><div class="live-count-label">현재 연결 수</div>`;
-                if (!data.length) { listEl.innerHTML = '연결이 없습니다.'; return; }
-                const rows = data.slice(0, 20).map(s => `
-                    <tr><td>${s.user || ''}</td><td>${s.host || ''}</td><td>${s.application_name || ''}</td><td>${s.state || ''}</td></tr>
-                `).join('');
-                listEl.innerHTML = `
-                    <table class="live-table">
-                        <thead><tr><th>계정</th><th>Host</th><th>App</th><th>상태</th></tr></thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                `;
-            })
-            .catch(err => {
-                countEl.innerHTML = `<span class="live-error">오류</span>`;
-                listEl.innerHTML = `<span class="live-error">${err.message}</span>`;
-            });
-    }
-    loadStorage();
-    loadConnections();
-
-    // ---- Real data: the remaining status-counter rows (/api/rdb/mssql_status) ----
-    function renderMetricList(el, items) {
-        el.innerHTML = `<table class="live-table"><tbody>${
-            items.map(([label, value]) => `<tr><td>${label}</td><td style="text-align:right;">${value}</td></tr>`).join('')
-        }</tbody></table>`;
-    }
-    function renderWaitTable(el, waits) {
-        if (!waits || !waits.length) { el.innerHTML = '대기 이벤트가 없습니다.'; return; }
-        const rows = waits.map(w => `
-            <tr><td>${w.waitType}</td><td style="text-align:right;">${Number(w.waitTimeMs).toLocaleString()}</td><td style="text-align:right;">${Number(w.waitingTasks).toLocaleString()}</td></tr>
-        `).join('');
-        el.innerHTML = `
-            <table class="live-table">
-                <thead><tr><th>Wait Type</th><th style="text-align:right;">Wait Time (ms)</th><th style="text-align:right;">Waiting Tasks</th></tr></thead>
-                <tbody>${rows}</tbody>
-            </table>
-        `;
-    }
-
-    function renderStatusPanels(d) {
-        if (d.error) {
-            Object.keys(liveHolders).forEach(key => {
-                if (key === 'storage' || key === 'connections') return;
-                (liveHolders[key] || []).forEach(el => { el.innerHTML = `<span class="live-error">${d.error}</span>`; });
-            });
+    /** label:value 목록 패널. 값은 textContent 로만 넣는다(서버가 준 문자열을 그대로 그리지 않는다). */
+    function renderKeyValues(el, items) {
+        el.innerHTML = '';
+        if (!items.length) {
+            el.innerHTML = '<span class="live-error">표시할 항목이 없습니다.</span>';
             return;
         }
-        if (liveHolders.batchActivity) {
-            renderMetricList(liveHolders.batchActivity[0], [
-                ['Batch Requests/sec', d.batchRequestsPerSec],
-                ['SQL Compilations/sec', d.compilationsPerSec],
-                ['SQL Re-Compilations/sec', d.recompilationsPerSec]
-            ]);
-        }
-        if (liveHolders.locks) {
-            renderMetricList(liveHolders.locks[0], [
-                ['Granted', d.locksGranted.toLocaleString()],
-                ['Waiting', d.locksWaiting.toLocaleString()]
-            ]);
-        }
-        if (liveHolders.waitStats) {
-            renderWaitTable(liveHolders.waitStats[0], d.topWaits);
-        }
-        if (liveHolders.memory) {
-            renderMetricList(liveHolders.memory[0], [
-                ['Total Server Memory (MB)', Number(d.totalServerMemoryMb).toLocaleString()],
-                ['Target Server Memory (MB)', Number(d.targetServerMemoryMb).toLocaleString()]
-            ]);
-        }
-        if (liveHolders.tempdb) {
-            renderMetricList(liveHolders.tempdb[0], [
-                ['Data File (MB)', d.tempdbDataMb],
-                ['Log File (MB)', d.tempdbLogMb]
-            ]);
-        }
-        if (liveHolders.io) {
-            renderMetricList(liveHolders.io[0], [
-                ['Reads', d.ioReads.toLocaleString()],
-                ['Writes', d.ioWrites.toLocaleString()],
-                ['Read Stall (ms)', d.ioReadStallMs.toLocaleString()],
-                ['Write Stall (ms)', d.ioWriteStallMs.toLocaleString()]
-            ]);
-        }
+        const list = document.createElement('div');
+        list.className = 'metric-list';
+        items.forEach(([label, value]) => {
+            const row = document.createElement('div');
+            row.className = 'metric-list-row';
+            const k = document.createElement('span');
+            k.className = 'metric-list-key';
+            k.textContent = label;
+            const v = document.createElement('span');
+            v.className = 'metric-list-val';
+            v.textContent = value === null || value === undefined ? '-' : String(value);
+            row.appendChild(k);
+            row.appendChild(v);
+            list.appendChild(row);
+        });
+        el.appendChild(list);
     }
 
-    // ---- Detail tab: time-series+legend chart style (same component as MySQL/PostgreSQL's dashboard),
-    // rendered with this instance's real values. No time-series history exists, so every "line" is a
-    // flat horizontal line at a single value - not a real historical trend.
-    function renderTimeSeriesPanel(container, opts) {
-        const svgNS = 'http://www.w3.org/2000/svg';
-        // viewBox width is measured from the actual rendered box (minus .ts-panel's own padding)
-        // instead of a fixed 400 - with preserveAspectRatio left at its "meet" default, a viewBox
-        // whose aspect ratio doesn't match the box it's stretched into forces the browser to scale
-        // x/y unevenly, which visibly smears text glyphs. Matching pixel dimensions 1:1 keeps text crisp.
-        const H = 160;
-        const W = Math.max(200, (container.clientWidth || 400) - 58); // 20px base padding + 0.5cm extra per side (~37.8px)
-        const padL = 34, padR = 8, padT = 10, padB = 20;
-        const plotW = W - padL - padR, plotH = H - padT - padB;
-        const yTicks = opts.yTicks;
-        const yMin = yTicks[0], yMax = yTicks[yTicks.length - 1];
-        function yPix(v) { return padT + plotH - ((v - yMin) / ((yMax - yMin) || 1)) * plotH; }
-
-        let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px;display:block;">`;
-        yTicks.forEach(t => {
-            const y = yPix(t);
-            svg += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="#2c2d32" stroke-width="1"/>`;
-            svg += `<text x="${padL - 4}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#8e8e8e">${t}</text>`;
-        });
-        (opts.xTicks || ['00:00', '02:00', '04:00', '06:00', '08:00', '10:00']).forEach((t, i, arr) => {
-            const x = padL + (plotW * i) / (arr.length - 1);
-            svg += `<text x="${x.toFixed(1)}" y="${H - 4}" text-anchor="middle" font-size="10" fill="#8e8e8e">${t}</text>`;
-        });
-        if (opts.yLabel) {
-            svg += `<text x="10" y="${padT + plotH / 2}" text-anchor="middle" font-size="10" fill="#8e8e8e" transform="rotate(-90 10 ${padT + plotH / 2})">${opts.yLabel}</text>`;
+    /** 표 패널. cells 는 문자열 배열이고 전부 textContent 로 들어간다. */
+    function renderTable(el, headers, rows, emptyText) {
+        el.innerHTML = '';
+        if (!rows.length) {
+            el.innerHTML = '<span class="live-error">' + (emptyText || '표시할 항목이 없습니다.') + '</span>';
+            return;
         }
-        opts.series.forEach(s => {
-            const baseY = yPix(s.value);
-            const points = `${padL},${baseY.toFixed(1)} ${W - padR},${baseY.toFixed(1)}`;
-            if (s.style === 'area') {
-                svg += `<polygon points="${points} ${W - padR},${(padT + plotH).toFixed(1)} ${padL},${(padT + plotH).toFixed(1)}" fill="${s.color}" fill-opacity="0.18"/>`;
-            }
-            const dash = s.dashed ? ' stroke-dasharray="3,2"' : '';
-            svg += `<polyline points="${points}" fill="none" stroke="${s.color}" stroke-width="1.5"${dash}/>`;
+        const wrap = document.createElement('div');
+        wrap.className = 'cub-table-wrap';
+        const table = document.createElement('table');
+        table.className = 'cub-table';
+        const thead = document.createElement('thead');
+        const htr = document.createElement('tr');
+        headers.forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            htr.appendChild(th);
         });
-        svg += `</svg>`;
-
-        const legendCols = opts.legendCols || ['min', 'max', 'avg'];
-        const legendRows = opts.series.map(s => `
-            <tr>
-                <td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:5px;"></span>${s.name}</td>
-                ${legendCols.map(c => `<td style="text-align:right;">${s.legend && s.legend[c] != null ? s.legend[c] : '-'}</td>`).join('')}
-            </tr>
-        `).join('');
-
-        container.innerHTML = `
-            <div class="ts-panel">
-                <div class="panel-title">${opts.title}</div>
-                ${svg}
-                <table class="live-table">
-                    <thead><tr><th>Series</th>${legendCols.map(c => `<th style="text-align:right;">${c}</th>`).join('')}</tr></thead>
-                    <tbody>${legendRows}</tbody>
-                </table>
-            </div>
-        `;
+        thead.appendChild(htr);
+        table.appendChild(thead);
+        const tbody = document.createElement('tbody');
+        rows.forEach(cells => {
+            const tr = document.createElement('tr');
+            cells.forEach(c => {
+                const td = document.createElement('td');
+                if (c && typeof c === 'object' && c.bar !== undefined) {
+                    // 사용률 칸: 숫자 + 막대(용량 조회 탭과 같은 임계값 - 75% 주황, 90% 빨강).
+                    const pct = Math.min(100, Math.max(0, Number(c.bar) || 0));
+                    td.textContent = c.text;
+                    const track = document.createElement('div');
+                    track.className = 'cub-bar-track';
+                    const fill = document.createElement('div');
+                    fill.className = 'cub-bar-fill' + (pct >= 90 ? ' danger' : (pct >= 75 ? ' warn' : ''));
+                    fill.style.width = pct + '%';
+                    track.appendChild(fill);
+                    td.appendChild(track);
+                } else {
+                    td.textContent = c === null || c === undefined ? '-' : String(c);
+                }
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        wrap.appendChild(table);
+        el.appendChild(wrap);
     }
 
-    // Rounds a max value up to a "nice" step and returns ~5 evenly spaced ticks from 0.
-    function niceTicks(maxVal) {
-        if (!maxVal || maxVal <= 0) return [0, 1, 2, 3, 4];
-        const rough = maxVal / 4;
-        const mag = Math.pow(10, Math.floor(Math.log10(rough)));
-        const norm = rough / mag;
-        const step = norm < 1.5 ? mag : norm < 3 ? 2 * mag : norm < 7 ? 5 * mag : 10 * mag;
-        const ticks = [];
-        for (let t = 0; t <= maxVal + step; t += step) {
-            ticks.push(Math.round(t * 100) / 100);
-            if (ticks.length > 6) break;
-        }
-        return ticks;
-    }
-
+    /** DASHBOARD 탭의 패널 자리를 만든다. */
     function buildDetailSection() {
         const mount = document.getElementById('detailRows');
         const groups = [
-            { label: 'Connections 행', keys: ['connections', 'requests'] },
-            { label: 'Throughput 행', keys: ['batchRequests', 'pageLife'] }
+            { label: '스레드 / 트랜잭션', keys: ['threads', 'trans'] },
+            { label: '볼륨', keys: ['volumes'] },
+            { label: '서버 로그 / 최근 접속', keys: ['logHeader', 'access'] }
         ];
         const holders = {};
         groups.forEach(g => {
@@ -962,9 +774,9 @@
             title.className = 'detail-row-title';
             title.innerHTML = `${g.label} <span class="live-badge">LIVE</span>`;
             mount.appendChild(title);
-
             const grid = document.createElement('div');
             grid.className = 'detail-grid';
+            if (g.keys.length === 1) grid.style.gridTemplateColumns = '1fr';
             g.keys.forEach(key => {
                 const slot = document.createElement('div');
                 slot.className = 'detail-slot';
@@ -983,49 +795,46 @@
             Object.values(detailHolders).forEach(el => { el.innerHTML = `<span class="live-error">${d.error}</span>`; });
             return;
         }
-        renderTimeSeriesPanel(detailHolders.connections, {
-            title: 'MS SQL Connections',
-            yTicks: niceTicks(Math.max(d.currentConnections, d.sessionsConnected, 1)),
-            series: [
-                { name: 'User Connections', color: '#5ac8db', value: d.currentConnections, legend: { min: d.currentConnections, max: d.currentConnections, avg: d.currentConnections } },
-                { name: 'Sessions Connected', color: '#e0b400', value: d.sessionsConnected, legend: { min: d.sessionsConnected, max: d.sessionsConnected, avg: d.sessionsConnected } }
-            ]
-        });
-        renderTimeSeriesPanel(detailHolders.requests, {
-            title: 'Requests & Worker Capacity',
-            yTicks: niceTicks(Math.max(d.requestsRunning, d.maxWorkers, 1)),
-            yLabel: 'Count',
-            series: [
-                { name: 'Requests Running', color: '#5794f2', style: 'area', value: d.requestsRunning, legend: { min: d.requestsRunning, max: d.requestsRunning, avg: d.requestsRunning } },
-                { name: 'Max Workers', color: '#ff9830', dashed: true, value: d.maxWorkers, legend: { min: d.maxWorkers, max: d.maxWorkers, avg: d.maxWorkers } }
-            ]
-        });
-        renderTimeSeriesPanel(detailHolders.batchRequests, {
-            title: 'Batch Requests (평균/초)',
-            yTicks: niceTicks(Math.max(d.batchRequestsPerSec, 1)),
-            series: [
-                { name: 'Batch Requests/sec', color: '#73bf69', style: 'area', value: d.batchRequestsPerSec, legend: { min: d.batchRequestsPerSec, max: d.batchRequestsPerSec, avg: d.batchRequestsPerSec } }
-            ]
-        });
-        renderTimeSeriesPanel(detailHolders.pageLife, {
-            title: 'Page Life Expectancy (sec)',
-            yTicks: niceTicks(Math.max(d.pageLifeExpectancy, 1)),
-            series: [
-                { name: 'Page Life Expectancy', color: '#73bf69', style: 'area', value: d.pageLifeExpectancy, legend: { min: d.pageLifeExpectancy, max: d.pageLifeExpectancy, avg: d.pageLifeExpectancy } }
-            ]
-        });
+        const byType = d.threadsByType || {};
+        const byStatus = d.threadsByStatus || {};
+        renderKeyValues(detailHolders.threads,
+            Object.keys(byType).map(k => ['종류 · ' + k, num(byType[k])])
+                .concat(Object.keys(byStatus).map(k => ['상태 · ' + k, num(byStatus[k])])));
+
+        const byState = d.tranByState || {};
+        const byIso = d.tranByIsolation || {};
+        const tranItems = Object.keys(byState).map(k => ['상태 · ' + k, num(byState[k])])
+            .concat(Object.keys(byIso).map(k => ['격리수준 · ' + k, num(byIso[k])]));
+        if (!tranItems.length) tranItems.push(['활성 트랜잭션', '0']);
+        renderKeyValues(detailHolders.trans, tranItems);
+
+        renderTable(detailHolders.volumes,
+            ['볼륨', '용도', '구분', '할당(MB)', '사용(MB)', '여유(MB)', '사용률'],
+            (d.volumes || []).map(v => [
+                v.name, v.purpose, v.kind, num(v.total_mb), num(v.used_mb), num(v.free_mb),
+                v.used_pct === null || v.used_pct === undefined
+                    ? '-' : { text: v.used_pct + '%', bar: v.used_pct }
+            ]), '볼륨 정보를 읽지 못했습니다.');
+
+        renderKeyValues(detailHolders.logHeader, [
+            ['CUBRID 버전', d.release],
+            ['DB 페이지 크기', d.dbPageSize ? num(d.dbPageSize) + ' bytes' : '-'],
+            ['로그 페이지 크기', d.logPageSize ? num(d.logPageSize) + ' bytes' : '-'],
+            ['활성 로그 페이지 수', num(d.numActiveLogPages)],
+            ['다음 트랜잭션 ID', num(d.nextTransId)],
+            ['마지막 체크포인트 LSA', d.checkpointLsa],
+            ['DB 생성 시각', d.dbCreationTime]
+        ]);
+
+        renderTable(detailHolders.access,
+            ['계정', '마지막 접속', '접속 호스트', '프로그램'],
+            (d.accessStatus || []).map(a => [a.user, a.last_access_time, a.last_access_host, a.program]),
+            '접속 이력이 없습니다.');
     }
 
-    // 탭 전환(DASHBOARD / 세션 리스트 / Lock 모니터링).
-    //
-    // 2026-09-04에 Detail 탭을 지우면서 탭이 하나만 남았고, 그때는 전환 로직을 걷어내고
-    // 표시 상태를 한 번 고정했었다. 2026-09-05에 세션 리스트/Lock 탭이 생겨 전환이 다시
-    // 필요해졌는데, 세 대시보드가 같은 코드를 세 번 복사하지 않도록 전환도 표도 모달도
-    // 전부 rdb-session-views.js 가 맡는다(그 파일 머리말 참고).
-    //
-    // overviewView 마크업은 지우지 않고 남겨둔다 - 나중에 되살릴 여지를 두되 노출만 막는다.
-    const overviewView = document.getElementById('overviewView');
-    if (overviewView) overviewView.style.display = 'none';
+    // 탭 전환(DASHBOARD / 세션 리스트 / 용량 조회). Lock 탭은 이 화면에 없다(위 마크업 주석 참고).
+    // 전환도 표도 모달도 전부 rdb-session-views.js 가 맡는다 - 네 대시보드가 같은 코드를 네 번
+    // 복사하지 않기 위함(그 파일 머리말 참고).
     if (window.dbagentInitRdbSessionViews) {
         window.dbagentInitRdbSessionViews({ dbId: dbId, getToken: getToken });
     } else {
@@ -1034,56 +843,66 @@
         if (detailView) detailView.style.display = 'block';
     }
 
-    // ---- Real data: KPI row (/api/rdb/mssql_overview) + accordion/detail panels
-    // (/api/rdb/mssql_status), fetched together.
+    // ---- Real data: KPI row (/api/rdb/cubrid_overview) + DASHBOARD 패널 (/api/rdb/cubrid_status)
     function loadAll() {
-        const ids = ['kpiUptime', 'kpiQps', 'kpiBufferPool', 'kpiHitRate', 'kpiUptime2', 'kpiQps2', 'kpiBufferPool2', 'kpiHitRate2'];
+        const ids = ['kpiActiveSessions', 'kpiLockWaits', 'kpiWorker', 'kpiVolume'];
         if (!dbId) {
             ids.forEach(id => { document.getElementById(id).innerHTML = '<span class="live-error">db_id 없음</span>'; });
             return;
         }
         Promise.all([
-            fetch(`/api/rdb/mssql_overview?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`).then(res => res.json()),
-            fetch(`/api/rdb/mssql_status?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`).then(res => res.json())
+            fetch(`/api/rdb/cubrid_overview?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`).then(res => res.json()),
+            fetch(`/api/rdb/cubrid_status?db_id=${encodeURIComponent(dbId)}&token=${encodeURIComponent(getToken())}`).then(res => res.json())
         ]).then(([overview, status]) => {
-            renderStatusPanels(status);
             if (overview.error) {
                 ids.forEach(id => { document.getElementById(id).innerHTML = `<span class="live-error">${overview.error}</span>`; });
                 renderDetailPanels({ error: overview.error });
                 return;
             }
-            ['kpiUptime', 'kpiUptime2'].forEach(id => { document.getElementById(id).textContent = overview.uptimeLabel; });
-            ['kpiQps', 'kpiQps2'].forEach(id => { document.getElementById(id).textContent = overview.qps; });
-            ['kpiBufferPool', 'kpiBufferPool2'].forEach(id => { document.getElementById(id).textContent = `${overview.bufferPoolGib} GiB`; });
-            // 값이 없으면 "null%" 대신 "-" 로 (MySQL 화면과 같은 처리, 2026-09-05)
-            const hitRate = overview.bufferPoolHitRatePct;
-            const hitRateKnown = (hitRate !== null && hitRate !== undefined);
-            ['kpiHitRate', 'kpiHitRate2'].forEach(id => {
-                const el = document.getElementById(id);
-                el.textContent = hitRateKnown ? `${hitRate}%` : '-';
-                el.className = 'kpi-value' + (hitRateKnown ? (hitRate >= 99 ? ' green' : ' orange') : '');
-                el.title = hitRateKnown ? '' : (overview.bufferPoolHitRateNote || '아직 계산할 수 없습니다.');
-            });
-            ['kpiHitRateGauge', 'kpiHitRateGauge2'].forEach(id => {
-                document.getElementById(id).style.width =
-                    hitRateKnown ? Math.min(100, Math.max(0, hitRate)) + '%' : '0%';
-            });
+
+            document.getElementById('kpiActiveSessions').textContent = num(overview.activeSessions);
+            document.getElementById('kpiActiveSessionsSub').textContent =
+                '트랜잭션 진행 중 ' + num(overview.openTransactions) + '건';
+
+            // 락 대기는 0 이 정상이다. 0 이 아니면 그 자체로 봐야 할 상황이므로 색을 바꾼다.
+            const lockWaits = overview.lockWaitSessions;
+            const lockEl = document.getElementById('kpiLockWaits');
+            lockEl.textContent = num(lockWaits);
+            lockEl.className = 'kpi-value' + (lockWaits > 0 ? ' orange' : ' white');
+            document.getElementById('kpiLockWaitsSub').textContent =
+                lockWaits > 0 ? '세션 리스트의 대기 이벤트 칸에서 확인' : '대기 중인 세션 없음';
+
+            // 워커 스레드 사용률 = 문서 6.1 "커넥션 풀 고갈율" 의 CUBRID 대응. 100%에 닿으면
+            // 새 요청이 대기하기 시작한다.
+            const workerPct = overview.workerBusyPct;
+            const workerKnown = (workerPct !== null && workerPct !== undefined);
+            const workerEl = document.getElementById('kpiWorker');
+            workerEl.textContent = workerKnown ? workerPct + '%' : '-';
+            workerEl.className = 'kpi-value' + (workerKnown ? (workerPct >= 80 ? ' orange' : ' white') : ' white');
+            document.getElementById('kpiWorkerGauge').style.width =
+                workerKnown ? Math.min(100, Math.max(0, workerPct)) + '%' : '0%';
+            document.getElementById('kpiWorkerSub').textContent =
+                num(overview.workerBusy) + ' / ' + num(overview.workerTotal) + ' 사용 중';
+
+            // 값이 없으면 "null%" 대신 "-" 로 (다른 대시보드와 같은 처리, 2026-09-05)
+            const volPct = overview.volumeUsedPct;
+            const volKnown = (volPct !== null && volPct !== undefined);
+            const volEl = document.getElementById('kpiVolume');
+            volEl.textContent = volKnown ? volPct + '%' : '-';
+            volEl.className = 'kpi-value' + (volKnown ? (volPct >= 90 ? ' orange' : (volPct >= 75 ? ' orange' : ' green')) : '');
+            document.getElementById('kpiVolumeGauge').style.width =
+                volKnown ? Math.min(100, Math.max(0, volPct)) + '%' : '0%';
+            document.getElementById('kpiVolumeSub').textContent = volKnown
+                ? num(overview.volumeUsedMb) + ' / ' + num(overview.volumeTotalMb) + ' MB'
+                : '볼륨 정보를 읽지 못했습니다.';
+
             renderDetailPanels(status);
         }).catch(err => {
             ids.forEach(id => { document.getElementById(id).innerHTML = `<span class="live-error">${err.message}</span>`; });
-            renderStatusPanels({ error: err.message });
             renderDetailPanels({ error: err.message });
         });
     }
     loadAll();
-
-    // KPI row collapse toggle.
-    const kpiToggle = document.getElementById('kpiToggle');
-    const kpiRow = document.getElementById('kpiRow');
-    kpiToggle.addEventListener('click', () => {
-        kpiToggle.classList.toggle('collapsed');
-        kpiRow.classList.toggle('collapsed');
-    });
 
     // ---- Header actions ported from index.html's .header-actions (사용자 요청, 2026-09-04) - same
     // origin/sessionStorage as index.html, so login state (dbagent_token/role/fleet_overview*) is
@@ -1222,7 +1041,7 @@
     // ---------------------------------------------------------------------
 
     /**
-     * 페이지별로 적재 함수 구성이 다르다(mssql/postgres는 loadAll, mysql은 loadStatusOverview +
+     * 페이지별로 적재 함수 구성이 다르다(mssql/postgres/cubrid는 loadAll, mysql은 loadStatusOverview +
      * loadKpiStats). 세 대시보드가 이 블록을 그대로 공유할 수 있도록, 선언되지 않은 식별자에도
      * 안전한 typeof로 존재하는 것만 호출한다.
      */

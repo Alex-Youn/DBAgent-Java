@@ -9,7 +9,7 @@ import java.util.Map;
 public record UpdateDbInstanceRequest(
         String token,
         String name,
-        // "oracle" (default) / "mysql" / "mariadb" / "postgres" / "mssql" - see TargetDbConfig.
+        // "oracle" (default) / "mysql" / "mariadb" / "postgres" / "mssql" / "cubrid" - see TargetDbConfig.
         @JsonProperty("db_type") String dbType,
         String host,
         int port,

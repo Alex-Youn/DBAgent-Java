@@ -10,7 +10,7 @@ public record CreateDbInstanceRequest(
         @JsonProperty("group_name") String groupName,
         String id,
         String name,
-        // "oracle" (default) / "mysql" / "mariadb" / "postgres" / "mssql" - see TargetDbConfig.
+        // "oracle" (default) / "mysql" / "mariadb" / "postgres" / "mssql" / "cubrid" - see TargetDbConfig.
         @JsonProperty("db_type") String dbType,
         String host,
         int port,
