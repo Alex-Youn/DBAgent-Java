@@ -32,6 +32,12 @@ public class OllamaChatService {
     @Value("${aidba.ollama.model}")
     private String model;
 
+    // 생성 응답을 기다리는 한도. 하드코딩 300초였으나, 모델 크기와 실행 위치(로컬 vs 원격 GPU 서버)에
+    // 따라 적정값이 크게 달라져 설정으로 뺐다 - 재빌드 없이 조정할 수 있어야 한다. 기존 동작을 그대로
+    // 유지하려고 기본값도 300000ms 로 뒀다(DBAgent-Java-AIX 쪽은 30000ms 로 별도 운영 중).
+    @Value("${aidba.ollama.timeout-ms:300000}")
+    private int timeoutMs;
+
     private final HttpClient http = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
             .build();
@@ -84,7 +90,7 @@ public class OllamaChatService {
     private HttpResponse<String> post(String url, JsonNode payload) throws IOException, InterruptedException {
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(300))
+                .timeout(Duration.ofMillis(timeoutMs))
                 .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
                 .build();
         return http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));

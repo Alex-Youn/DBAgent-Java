@@ -1,6 +1,7 @@
 # 다음 작업 정리
 
-> 작성 2026-09-07 · **전부 미착수**. 이 문서에 적힌 항목 중 코드에 반영된 것은 없다.
+> 작성 2026-09-07 · 최종 갱신 2026-09-07
+> 항목별 상태를 제목에 표시한다(**완료** / **불필요** / 표시 없으면 미착수).
 > 대상: `DBAgent-Java` / `DBAgent-Java-AIX` (2026-08-26 확정 원칙 — 두 프로젝트는 항상 같이 진행)
 
 ---
@@ -12,11 +13,11 @@
 `pool.max-size`, `sqltuning.api.timeout-ms`). 값은 전부 코드 기본값과 동일해 **동작 변화는 없다.**
 여기서 파생된 후속 항목들:
 
-### 1.1 재빌드 + dist 재배포 — 우선순위 낮음
+### 1.1 재빌드 + dist 재배포 — **완료 (2026-09-07)**
 
-`application.properties`는 jar에 번들되므로 반영하려면 `mvn clean package` 후 재배포가 필요하다.
-다만 이번 변경은 **주석과 기본값 명시뿐이라 동작이 바뀌지 않으므로 급하지 않다.** 다음 기능 변경
-빌드에 묻어가면 된다.
+양쪽 `mvn clean package` 후 배포 3곳(`DBAgent-Java\dist`, `DBAgent-Java-AIX\dist`,
+`DBAgent-Java-AIX\dist-aix`) 모두 교체하고 SHA256 일치를 확인했다. 8006 / 8007 재기동 후
+HTTP 200 및 `err.log` 무에러 확인. `dist-aix`는 폐쇄망 전용이라 로컬 기동 검증은 생략(jar만 교체).
 
 > `dist/application.properties`는 **수정하지 않았고, 할 필요도 없다.** Spring Boot는 jar 옆의 외부
 > `application.properties`를 부분 오버라이드로 취급해, 거기 없는 키는 번들 파일에서 폴백한다.
@@ -35,35 +36,42 @@ AIX는 값이 다른 항목이 있어 그대로 두었다.
 - `spring.datasource.*` — H2 (`username`/`password` 존재) vs 메인 SQLite
 - `aidba.ollama.timeout-ms` — **AIX에만 있는 키** (아래 1.3 참조)
 
-### 1.3 메인 `OllamaChatService` 타임아웃을 설정으로 분리 — GPU 서버 계획 있으면 권장
+### 1.3 메인 `OllamaChatService` 타임아웃을 설정으로 분리 — **완료 (2026-09-07)**
 
-두 프로젝트가 갈라져 있다:
+메인의 `.timeout(Duration.ofSeconds(300))` 하드코딩을 `@Value("${aidba.ollama.timeout-ms:300000}")`
+로 바꾸고 `application.properties`에도 명시했다. **기본값을 300000ms로 둬서 기존 동작은 그대로다.**
 
-| | 메인 | AIX |
-|---|---|---|
-| 구현 | `.timeout(Duration.ofSeconds(300))` 하드코딩 (`OllamaChatService.java:87`) | `@Value("${aidba.ollama.timeout-ms:30000}")` (`:43`) |
+`aidba`는 두 프로젝트 간 동기화 제외 영역이라 AIX(30000ms)와 값이 다른 것은 의도된 상태로 남긴다.
+이제 원격 GPU 서버 + 대형 모델로 옮겨 응답 시간이 달라져도 재빌드 없이 조정할 수 있다.
 
-`aidba`는 두 프로젝트 간 동기화 제외 영역이라 divergence 자체는 정상이다. 다만 **메인은 값을
-조정하려면 재빌드가 필요하다.** GPU 서버에 더 큰 모델을 올리면 응답 시간이 달라지므로, AIX처럼
-`aidba.ollama.timeout-ms`로 빼두는 편이 낫다.
+### 1.4 `aidba.ollama.url` / `aidba.ollama.model` 에 `@Value` 기본값 추가 — **불필요 (전제 오류)**
 
-### 1.4 `aidba.ollama.url` / `aidba.ollama.model` 에 `@Value` 기본값 추가 — AIX 배포 안전장치
+**이 항목의 원래 근거는 틀렸다.** "AIX 서버에 `application.properties`를 새로 만들면서 이 두 줄을
+빠뜨리면 앱이 안 뜬다"고 적었으나, 실제로는 그렇지 않다:
 
-이 두 키만 `@Value` 기본값이 없다(`OllamaChatService.java:29,32`). 즉 **이 두 줄이 없는 환경에서는
-AI DBA 기능만이 아니라 앱 전체가 기동하지 못한다.**
+- jar 옆의 외부 `application.properties`는 기본 위치를 **대체하지 않고 추가**된다. 거기 없는 키는
+  jar 안 `BOOT-INF/classes/application.properties`에서 폴백한다.
+- `start-aix.sh`는 `--spring.config.location` 없이 평범한 `nohup java -jar` 로 실행한다(65번 줄).
+  즉 번들 properties가 항상 로드된다.
+- 실증: 현재 `dist/application.properties`에는 `dbagent.databases-config`,
+  `dbagent.oracle-env-path`, `aidba.errors-db-path`가 **없는데도** 앱이 정상 동작한다.
 
-`SqlTuningService`는 같은 이유로 이미 기본값을 두고 그 근거를 주석에 남겨놨다(2026-09-04 결정).
-`OllamaChatService`만 그 규칙을 따르지 않은 상태다.
+기본값 없는 키는 이 둘 외에도 `aidba.errors-db-path`, `dbagent.databases-config`,
+`dbagent.oracle-env-path`가 있으나 같은 이유로 모두 문제되지 않는다. 번들 properties에서 키를
+지우거나 `--spring.config.location`으로 기본 위치를 대체하는 경우에만 터지는데, 둘 다 현재 없다.
 
-**언제 터지는가:** `dist-aix\`에는 `application.properties`가 아예 없어서 지금은 번들 기본값으로
-폴백해 문제가 없다. 그런데 GPU 서버 연동을 위해 AIX 서버에 이 파일을 새로 만들면서 이 두 줄을
-빠뜨리면 그 순간 앱이 안 뜬다. GPU 연동 작업 **전에** 처리해 두는 게 안전하다.
+> `SqlTuningService`의 "커밋 대상에서 빠져 있다"는 주석(2026-09-04)도 지금은 맞지 않는다 —
+> `src/main/resources/application.properties`는 커밋 대상이다(`git check-ignore` 무시 없음,
+> 이력도 `934f377`까지 이어짐). 그 주석 자체를 고칠지는 별도 판단 필요.
 
-### 1.5 AIX `dist/application.properties` 에 `aidba.*` 추가 — 선택
+### 1.5 AIX `dist/application.properties` 에 `aidba.*` 추가 — 선택, **사용자 결정 대기**
 
 로컬 8007에서도 gemma로 테스트하려면 `aidba.ollama.url` / `aidba.ollama.model` 두 줄이 필요하다.
 현재는 없어서 번들 기본값(`qwen2.5:3b`)으로 동작한다. 메인 `dist/`에는 이미
 `aidba.ollama.model=gemma4:31b-cloud`가 들어가 있다.
+
+임의로 넣지 않았다 — `-cloud` 모델은 프롬프트가 Ollama 클라우드로 전송되므로, 8007에도 적용할지는
+판단이 필요한 사안이다.
 
 ---
 
@@ -91,7 +99,7 @@ AI DBA 기능만이 아니라 앱 전체가 기동하지 못한다.**
 | `sql-tuning-rag-design.md` | 파인튜닝 → RAG 전환 설계 (8010 뒤 배치, Java 변경 0) | 제안, 미확정 |
 | 〃 §7 | 폐쇄망 GPU 서버 연동 시 확인사항 6건 | GPU 서버 준비 시 적용 |
 | 〃 §8 | MCP 노출 (선택, 후순위) | 조건부 |
-| `rdb_dashboard_ui_overhaul_2026_09_06` | RDB 대시보드 UI 개편 + §6 잔여 지표 | 기존 계획, 별건 |
+| (문서 없음) | RDB 대시보드 UI 개편 + 잔여 지표(접속 고갈·장기 트랜잭션·버퍼 추이·temp/log 용량) | 기존 계획, 별건 |
 
 ---
 
