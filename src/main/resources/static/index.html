@@ -439,11 +439,17 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 0;">
-                                    <input type="text" id="aidba-chat-input" placeholder="질문을 입력하세요..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main);">
-                                    <button id="aidba-chat-send-btn" class="primary-btn" style="padding: 0 20px; border-radius: 6px;">
-                                        <i data-lucide="send"></i> 전송
-                                    </button>
+                                <!-- 입력창은 textarea 다(사용자 요청: 한 줄짜리 input 은 긴 질문을 쓰기 불편).
+                                     여러 줄 입력이 가능해졌으므로 Enter 는 전송, Shift+Enter 는 줄바꿈으로 나눈다(app.js 참고).
+                                     resize: vertical 을 줄서 부족하면 사용자가 더 늘릴 수 있다. -->
+                                <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 0; align-items: stretch;">
+                                    <textarea id="aidba-chat-input" rows="4" placeholder="질문을 입력하세요...  (Enter: 전송 / Shift+Enter: 줄바꿈)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main); font-family: inherit; font-size: 0.95rem; line-height: 1.6; resize: vertical; min-height: 96px;"></textarea>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;">
+                                        <button id="aidba-chat-send-btn" class="primary-btn" style="padding: 0 20px; border-radius: 6px; flex: 1; white-space: nowrap;">
+                                            <i data-lucide="send"></i> 전송
+                                        </button>
+                                        <button id="aidba-chat-clear-btn" type="button" style="padding: 0 20px; border-radius: 6px; height: 40px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; white-space: nowrap;"><i data-lucide="eraser"></i> 화면 클리어</button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -967,6 +973,6 @@
     </div>
 
 
-    <script src="app.js?v=95"></script>
+    <script src="app.js?v=96"></script>
 </body>
 </html>

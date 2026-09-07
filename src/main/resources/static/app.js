@@ -3836,6 +3836,10 @@ let historySortAsc = true;
     const aiChatInput = document.getElementById('aidba-chat-input');
     const aiChatSendBtn = document.getElementById('aidba-chat-send-btn');
     const aiChatHistory = document.getElementById('aidba-chat-history');
+    const aiChatClearBtn = document.getElementById('aidba-chat-clear-btn');
+    // "화면 클리어" 로 되돌릴 초기 인사말. index.html 의 마크업을 로드 시점에 그대로 보관해 두고
+    // 재사용한다 - 인사말 문구를 index.html 에서 고쳐도 여기 코드를 같이 손댈 필요가 없다.
+    const aiChatInitialHtml = aiChatHistory ? aiChatHistory.innerHTML : '';
 
     if (aiChatInput && aiChatSendBtn && aiChatHistory) {
         const sendMessage = () => {
@@ -3872,7 +3876,13 @@ let historySortAsc = true;
                 
                 let sourceHtml = "";
                 if (data.context_used) {
-                    sourceHtml = `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">[+] 검색된 에러 매뉴얼 원문 보기</div><div style="display: none; font-size: 0.8rem; color: var(--text-muted); background: var(--bg-main); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap;">${data.context_used}</div>`;
+                    // 사용자 피드백: 펼쳤을 때 글자가 너무 작고 잘 안 보인다. 0.8rem/text-muted 조합은
+                    // 회색 위 회색이라 사실상 읽히지 않았다 - 토글 줄은 primary 색 굵은 글씨로 눈에 띄게 하고,
+                    // 원문은 본문과 같은 0.95rem 에 본문 색(text-main)으로 올렸다. DB 에서 가져온 매뉴얼은
+                    // 자리 맞춤이 있는 텍스트라 등폭 글꼴 + 넉넉한 줄간격으로 두고, 길어질 수 있어
+                    // max-height 를 줘서 말풍선이 아니라 이 블록 안에서만 스크롤되게 한다.
+                    const srcLabel = '검색된 에러 매뉴얼 원문';
+                    sourceHtml = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.9rem; font-weight: 600; color: var(--primary); cursor: pointer; user-select: none;" onclick="var b=this.nextElementSibling; var willOpen=(b.style.display==='none'); b.style.display=willOpen?'block':'none'; this.textContent=(willOpen?'[-] ':'[+] ')+'${srcLabel}';">[+] ${srcLabel}</div><div style="display: none; font-size: 0.95rem; line-height: 1.7; color: var(--text-main); background: var(--bg-main); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: 6px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-family: 'D2Coding', Consolas, 'Courier New', monospace; max-height: 320px; overflow-y: auto;">${data.context_used}</div>`;
                 }
 
                 aiMsg.innerHTML = `<div style="background: var(--bg-card); padding: 12px; border-radius: 8px; max-width: 80%; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); line-height: 1.6;">${formattedAnswer}${sourceHtml}</div>`;
@@ -3885,9 +3895,26 @@ let historySortAsc = true;
         };
 
         aiChatSendBtn.addEventListener('click', sendMessage);
-        aiChatInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
+        aiChatInput.addEventListener('keydown', (e) => {
+            // input -> textarea 로 바뀌면서 Enter 의 의미가 갈렸다: Enter 는 전송, Shift+Enter 는 줄바꿈.
+            // isComposing 체크가 없으면 한글 조합 중 Enter(글자 확정)에 그대로 전송돼 버린다.
+            if (e.isComposing) return;
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
         });
+
+        if (aiChatClearBtn) {
+            aiChatClearBtn.addEventListener('click', () => {
+                aiChatHistory.innerHTML = aiChatInitialHtml;
+                aiChatHistory.scrollTop = 0;
+                aiChatInput.value = '';
+                aiChatInput.focus();
+                // 보관해 둔 마크업에 lucide 아이콘이 들어 있을 수 있어 다시 그려준다.
+                if (typeof lucide !== 'undefined') lucide.createIcons({root: aiChatHistory});
+            });
+        }
     }
 
 // SQL 정합성/튜닝 Logic

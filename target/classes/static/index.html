@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DB InsightFlow</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1">
-    <link rel="stylesheet" href="style.css?v=24">
+    <link rel="stylesheet" href="style.css?v=34">
     <script src="lib/lucide.js"></script>
+    <script src="dbagent-common.js?v=10"></script>
     <script src="lib/mermaid.min.js"></script>
     <script src="lib/chart.js"></script>
     <script src="lib/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -160,9 +161,19 @@
         <!-- Main Content -->
         <main class="main-content">
             <header class="top-header" style="flex-direction: column; align-items: stretch; gap: 0; padding-bottom: 0;">
-                <div style="display: flex; justify-content: flex-end; align-items: center; padding-bottom: 15px;">
+                <!-- 상단 줄. 높이(54px)와 좌측 타이틀+chevron 드롭다운 구성은 RDB 대시보드의
+                     .pmm-header 와 맞췄다(2026-09-06 사용자 요청) - 두 화면을 오가며 쓰는데
+                     최상단 모양이 서로 달라 이질감이 있었다. 드롭다운은 좌측 트리를 열지 않고도
+                     DB를 바꿀 수 있게 해 준다. -->
+                <div class="top-header-row">
+                    <div class="top-title" id="ora-title-wrap" title="다른 DB 인스턴스로 전환">
+                        <span id="ora-title">Oracle Overview</span>
+                        <i data-lucide="chevron-down" class="caret"></i>
+                        <div id="ora-title-dropdown" class="title-dropdown"></div>
+                    </div>
                     <h1 id="page-title" style="display: none;">대시보드</h1>
                     <div class="header-actions">
+                        <button class="icon-btn rdb-btn" id="rdb-dashboard-btn" style="display: none;" title="RDB 대시보드 (MySQL/MariaDB/PostgreSQL/MS SQL)"><i data-lucide="database"></i>RDB</button>
                         <button class="icon-btn fo-btn" id="fleet-overview-btn" title="Fleet Overview (전체 DB 현황판)">FO</button>
                         <label class="fo-auto-toggle" id="fo-auto-toggle-wrap" title="로그인 시 Fleet Overview로 자동 이동">
                             <input type="checkbox" id="fo-auto-toggle-input"><span>자동</span>
@@ -325,7 +336,8 @@
                             <div id="dash-active-sess" class="dash-tab-content" style="display: block;">
                                 <div class="table-container" style="max-height: 400px; overflow-y: auto;">
                                     <div style="margin-bottom: 10px; text-align: right;">
-                                        <button id="dash-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;">선택 세션 Kill</button>
+                                        <span class="kill-selected-count admin-only" id="dash-selected-count"></span>
+                                        <button id="dash-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;" disabled>선택 세션 Kill</button>
                                     </div>
                                     <table class="data-table">
                                         <thead>
@@ -427,11 +439,17 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 0;">
-                                    <input type="text" id="aidba-chat-input" placeholder="질문을 입력하세요..." style="flex: 1; padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main);">
-                                    <button id="aidba-chat-send-btn" class="primary-btn" style="padding: 0 20px; border-radius: 6px;">
-                                        <i data-lucide="send"></i> 전송
-                                    </button>
+                                <!-- 입력창은 textarea 다(사용자 요청: 한 줄짜리 input 은 긴 질문을 쓰기 불편).
+                                     여러 줄 입력이 가능해졌으므로 Enter 는 전송, Shift+Enter 는 줄바꿈으로 나눈다(app.js 참고).
+                                     resize: vertical 을 줄서 부족하면 사용자가 더 늘릴 수 있다. -->
+                                <div class="search-bar" style="display: flex; gap: 10px; margin-bottom: 0; align-items: stretch;">
+                                    <textarea id="aidba-chat-input" rows="4" placeholder="질문을 입력하세요...  (Enter: 전송 / Shift+Enter: 줄바꿈)" style="flex: 1; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-card); color: var(--text-main); font-family: inherit; font-size: 0.95rem; line-height: 1.6; resize: vertical; min-height: 96px;"></textarea>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;">
+                                        <button id="aidba-chat-send-btn" class="primary-btn" style="padding: 0 20px; border-radius: 6px; flex: 1; white-space: nowrap;">
+                                            <i data-lucide="send"></i> 전송
+                                        </button>
+                                        <button id="aidba-chat-clear-btn" type="button" style="padding: 0 20px; border-radius: 6px; height: 40px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary); cursor: pointer; white-space: nowrap;"><i data-lucide="eraser"></i> 화면 클리어</button>
+                                    </div>
                                 </div>
                             </div>
                             
@@ -631,7 +649,8 @@
                         <div class="panel-header">
                             <h2>Lock Holder/Waiter Tree 실시간 모니터링</h2>
                             <div style="display: flex; gap: 20px;">
-                                <button id="tmlock-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;">선택 세션 Kill</button>
+                                <span class="kill-selected-count admin-only" id="tmlock-selected-count"></span>
+                                <button id="tmlock-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;" disabled>선택 세션 Kill</button>
                                 <div class="refresh-controls" style="display: flex; align-items: center; gap: 10px;">
                                     <label for="tmlock-refresh-interval" style="font-size: 0.9rem; color: var(--text-secondary);">리프레쉬 주기(초):</label>
                                     <input type="number" id="tmlock-refresh-interval" value="5" min="1" max="60" style="width: 60px; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-card); color: var(--text-primary);">
@@ -641,13 +660,24 @@
                             </div>
                         </div>
                         <div class="panel-body">
+                            <!-- 2026-09-06: 이 표가 RDB 대시보드와 같은 배지+트리 방식으로 바뀌면서 BOTH 가
+                                 등장하는데, 무슨 뜻인지와 어떻게 처리해야 하는지가 화면 어디에도 없었다.
+                                 RDB Lock 탭과 같은 내용을 둔다(rdb-session-views.js 의 기본 문구). -->
+                            <p class="lock-help">
+                                락을 쥔 세션(Holder)을 위에, 그 락을 기다리는 세션(Waiter)을 아래에 붙여 트리로 보여줍니다.
+                                A가 B를, B가 C를 막는 다단계 체인도 그대로 이어지며, 가운데 세션은 <b>BOTH</b>로 표시됩니다.
+                                맨 위 Holder만 종료하면 바로 아래 한 단계만 풀리고 그 아래는 계속 기다립니다 —
+                                체인을 한 번에 정리하려면 <b>Holder와 BOTH를 함께 선택해 종료</b>하세요.
+                            </p>
                             <div class="table-container" style="max-height: 500px; overflow-y: auto; margin-top: 10px;">
                                 <table class="data-table" style="width: 100%; text-align: left;">
                                     <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 1;">
                                         <tr>
+                                            <!-- INST_ID 는 2026-09-06 에 뺐다: RAC 환경이라도 gv$ 를 쓰지 않기로
+                                                 확정해(실 RAC 에서 Lock/세션 조회 성능 저하) 단일 인스턴스 값만
+                                                 나오는 칸이었다. 대신 맨 끝에 OS User 를 넣는다. -->
                                             <th style="width: 40px; text-align: center;"><input type="checkbox" id="tmlock-select-all"></th>
                                             <th>SID</th>
-                                            <th>INST_ID</th>
                                             <th>Serial#</th>
                                             <th>SPID</th>
                                             <th>userName</th>
@@ -659,6 +689,7 @@
                                             <th>Status</th>
                                             <th>Program</th>
                                             <th>machine</th>
+                                            <th>OS User</th>
                                         </tr>
                                     </thead>
                                     <tbody id="tmlock-tbody">
@@ -712,7 +743,8 @@
                             <!-- Tab: Active Session -->
                             <div id="sesslist-active-session" class="sesslist-tab-content" style="display: block;">
                                 <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px;">
-                                    <button id="session-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;">선택 세션 Kill</button>
+                                    <span class="kill-selected-count admin-only" id="session-selected-count"></span>
+                                    <button id="session-kill-btn" class="danger-btn admin-only" style="padding: 6px 12px; border-radius: 4px; font-size: 0.9rem;" disabled>선택 세션 Kill</button>
                                 </div>
                                 <div style="max-height: 500px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 4px;">
                                     <table class="data-table" style="border: none;">
@@ -941,6 +973,6 @@
     </div>
 
 
-    <script src="app.js?v=82"></script>
+    <script src="app.js?v=96"></script>
 </body>
 </html>
