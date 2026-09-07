@@ -6,6 +6,63 @@
 
 ---
 
+## 0. 필수 진행 사항 (2026-09-07 지시) — **최우선, 전부 미착수**
+
+세션 상세정보가 실제와 다르게 나오는 문제. 데이터 정확성 이슈라 UI 개선보다 우선한다.
+아래 1~3 은 같은 뿌리일 가능성이 있으므로 1 번 원인을 먼저 규명한 뒤 2·3 을 점검한다.
+
+### 0.1 [버그] 트레이스 그래프 드래그 → 세션 클릭 시 엉뚱한 쿼리가 나온다
+
+**증상 (사용자 보고):** Current Session 의 트레이스 그래프에서 드래그하면 해당 세션들이 팝업
+목록으로 뜬다. 그 목록의 `command` 항목은 UPDATE 로 표시되는데, 정작 그 세션을 클릭해서 상세정보를
+열면 전혀 상관없는 SELECT 쿼리가 나온다.
+
+**관련 코드 (조사 시작점):**
+
+| 위치 | 역할 |
+|---|---|
+| `app.js:3219` `scatterPointerToLocal()` | 드래그 좌표 → 차트 로컬 좌표 변환 |
+| `app.js:3336` `showSelectedSessionsPopup()` | 선택된 세션들을 localStorage 에 담고 `session-list.html` 팝업 오픈 |
+| `session-list.html:59,61` | 목록 렌더링. `command` 는 `s.command` 를 `cmdMap` 으로 변환해 표시하고, 행에는 `data-sid` / `data-sql_id` 만 심는다 |
+| `app.js:3170` (전역 click 위임) / `session-list.html:100` | 행 클릭 → `session-detail.html?db_id&sid&sql_id` 팝업 오픈 |
+| `session-detail.html:37` | `/api/session_query?db_id=&sid=&sql_id=` 호출 |
+
+**확인할 지점 (가설, 미검증):**
+
+- 목록은 드래그 시점에 잡힌 스냅샷(`command`, `sql_id`)을 들고 있는데, 상세는 `sid` 로 **다시 조회**한다.
+  그 사이 세션이 다른 SQL 을 실행 중이면 상세에는 "현재 실행 중인 SQL"이 나온다 — 목록의 UPDATE 와
+  상세의 SELECT 가 어긋나는 전형적인 형태다.
+- Oracle SID 는 재사용된다. `serial#` 없이 `sid` 만으로 조회하면 **다른 세션**을 집을 수 있다.
+  행에 `data-serial` 이 없고 API 도 받지 않는 것으로 보이니 이 부분을 먼저 확인할 것.
+- `data-sql_id` 가 비어 있을 때 서버가 `sid` 기준으로 폴백해 무엇을 돌려주는지 확인 필요.
+
+**해야 할 일:** 원인 규명 후 수정. 목록에서 클릭한 그 시점의 세션/SQL 이 상세에 그대로 나와야 한다.
+
+### 0.2 [개선] 드래그 선택 정확도
+
+같은 화면에서 드래그 영역과 실제로 선택되는 세션이 잘 맞지 않는다. 정확도를 높일 것.
+`scatterPointerToLocal()` 의 좌표 변환(캔버스 스케일/DPR, 차트 패딩, 스크롤 오프셋)과
+선택 판정 로직을 함께 볼 것.
+
+### 0.3 [점검] 오라클 화면의 세션 상세정보 조회가 정확한지 전수 점검
+
+다음 4개 화면에서 세션 상세정보가 올바른 세션/쿼리를 보여주는지 확인한다.
+
+- Dashboard
+- Current Session
+- 성능이력조회
+- Lock Holder/Waiter Tree
+
+### 0.4 [점검] RDB 화면의 세션 상세정보 조회 점검
+
+MySQL / MariaDB / PostgreSQL / MS SQL Server / CUBRID 대시보드의 세션 상세 보기도 같은 관점에서
+점검한다. 서버측 진입점은 `RdbMonitorController.java:104` 의 `GET /session_detail` 이다.
+
+> 수정은 `DBAgent-Java` / `DBAgent-Java-AIX` **양쪽에 반영**해야 한다(2026-08-26 확정 원칙).
+> monitor / rdb 는 동기화 대상이다(동기화 제외는 `com.dbagent.aidba` 뿐).
+
+---
+
 ## 1. 설정 정리 후속 (2026-09-07 작업에서 파생)
 
 `src/main/resources/application.properties`에 누락돼 있던 `@Value` 키 6개를 주석과 함께 채워 넣었다
