@@ -2,7 +2,6 @@ package com.dbagent.aidba;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -14,23 +13,36 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
-/** Calls a local Ollama process, same contract as the Python route (chat API with a generate-API fallback). */
+/**
+ * Calls the SQL Tune Advisor GPU 서버의 sqlrestapi - Ollama(11434)에 더 이상 직접 붙지 않는다.
+ * GPU 서버 방화벽이 REST API 포트(9300) 하나만 열어주는 구성으로 확정되면서(2026-09-11), Ollama
+ * 포트는 그 서버 밖에서 도달 불가능해졌다 - sqlrestapi(RAGController)가 그 앞단의 프록시 역할을
+ * 대신한다.
+ *
+ * 시스템 프롬프트는 이제 이 서비스가 문자열로 들고 있지 않는다 - sqlrestapi 쪽에 promptId별 파일
+ * (prompts/chatbot.md)로 옮겨서 SQL Tune Advisor(promptId=tuning)와 구조를 통일했다(2026-09-11).
+ * 어떤 LLM을 쓰는지도 마찬가지로 sqlrestapi 쪽(sqltune.llm.model) 설정을 따른다.
+ *
+ * 하이브리드 검색: ErrorSearchService가 ORA 코드 정확 일치/키워드로 컨텍스트를 찾으면 ask()(검색
+ * 없는 /api/chat)로 바로 답변을 받고, 못 찾으면 askWithSemanticSearch()로 sqlrestapi의
+ * OpenSearch 시맨틱 검색(error_dictionary 인덱스)에 맡긴다 - AiDbaController가 이 둘을 고른다.
+ *
+ * aidba.ollama.url 프로퍼티 이름은 과거 호환을 위해 그대로 유지했지만, 이제 값은 Ollama가 아니라
+ * sqlrestapi의 베이스 URL을 가리켜야 한다(예: http://<GPU서버>:9300).
+ */
 @Service
 public class OllamaChatService {
 
-    private static final String SYSTEM_PROMPT_TEMPLATE =
-            "당신은 오라클 데이터베이스(Oracle DB) 에러 해결을 도와주는 20년차 전문 DBA(AI 어시스턴트)입니다. "
-                    + "사용자의 질문에 대해 아래 제공된 [참고 자료]를 바탕으로 명확하고 친절하게 답변해주세요. "
-                    + "중요: 당신의 모든 답변은 무조건 한국어(Korean)로만 작성해야 합니다. 절대 영어로 답변하지 마세요. "
-                    + "참고 자료에 없는 내용을 추측해서 지어내지(Hallucination) 마세요. "
-                    + "해결 방법을 안내할 때는 가독성 좋게 글머리 기호를 사용해주세요.\n\n[참고 자료]\n%s";
+    private static final String PROMPT_ID = "chatbot";
+    private static final String ERROR_INDEX = "error_dictionary";
 
     @Value("${aidba.ollama.url}")
-    private String ollamaUrl;
-
-    @Value("${aidba.ollama.model}")
-    private String model;
+    private String chatApiUrl;
 
     // 생성 응답을 기다리는 한도. 하드코딩 300초였으나, 모델 크기와 실행 위치(로컬 vs 원격 GPU 서버)에
     // 따라 적정값이 크게 달라져 설정으로 뺐다 - 재빌드 없이 조정할 수 있어야 한다. 기존 동작을 그대로
@@ -43,51 +55,60 @@ public class OllamaChatService {
             .build();
     private final ObjectMapper mapper = new ObjectMapper();
 
+    /** 검색 없이 컨텍스트(caller가 이미 조립)를 그대로 붙여 답변만 받는다 - ORA 코드 정확 일치 경로. */
     public String ask(String prompt, String context) throws IOException, InterruptedException {
-        String systemPrompt = String.format(SYSTEM_PROMPT_TEMPLATE, context);
+        String finalPrompt = "[참고 자료]\n" + context + "\n\n[사용자 질문]\n" + prompt
+                + "\n\n반드시 한국어로 답하세요.";
 
-        String answer = callChatApi(systemPrompt, prompt);
-        if (answer == null) {
-            // Older Ollama versions only expose /api/generate.
-            answer = callGenerateApi(systemPrompt, prompt);
-        }
-        return (answer == null || answer.isBlank()) ? "답변을 생성하지 못했습니다." : answer;
-    }
-
-    private String callChatApi(String systemPrompt, String prompt) throws IOException, InterruptedException {
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("model", model);
-        ArrayNode messages = payload.putArray("messages");
-        messages.addObject().put("role", "system").put("content", systemPrompt);
-        messages.addObject().put("role", "user").put("content", prompt);
-        payload.put("stream", false);
-        payload.putObject("options").put("temperature", 0);
+        payload.put("promptId", PROMPT_ID);
+        payload.put("prompt", finalPrompt);
 
-        HttpResponse<String> resp = post(ollamaUrl + "/api/chat", payload);
-        if (resp.statusCode() == 404) {
-            return null;
-        }
+        HttpResponse<String> resp = post(chatApiUrl + "/api/chat", payload);
         if (resp.statusCode() >= 400) {
-            throw new IOException("Ollama /api/chat returned HTTP " + resp.statusCode());
+            throw new IOException("sqlrestapi /api/chat returned HTTP " + resp.statusCode());
         }
-        return mapper.readTree(resp.body()).path("message").path("content").asText("");
+
+        String answer = mapper.readTree(resp.body()).path("answer").asText("");
+        return answer.isBlank() ? "답변을 생성하지 못했습니다." : answer;
     }
 
-    private String callGenerateApi(String systemPrompt, String prompt) throws IOException, InterruptedException {
+    /**
+     * ORA 코드 정확 일치/키워드로 아무것도 못 찾았을 때의 폴백 - sqlrestapi가 bge-m3로 질문을
+     * 임베딩해 error_dictionary 인덱스에서 의미상 가까운 사례를 찾고, 그걸 컨텍스트로 붙여 직접
+     * 답변까지 생성해 돌려준다(SQL Tune Advisor의 /api/query와 동일한 메커니즘, 인덱스/프롬프트만
+     * 다름). 반환 맵: {"answer": String, "references": List<Map<source,content>>}.
+     */
+    public Map<String, Object> askWithSemanticSearch(String userMessage) throws IOException, InterruptedException {
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("model", model);
-        payload.put("prompt", systemPrompt + "\n\n사용자 질문: " + prompt);
-        payload.put("stream", false);
-        payload.putObject("options").put("temperature", 0);
+        payload.put("promptId", PROMPT_ID);
+        payload.put("index", ERROR_INDEX);
+        payload.put("query", userMessage);
+        payload.put("n_results", 3);
 
-        HttpResponse<String> resp = post(ollamaUrl + "/api/generate", payload);
+        HttpResponse<String> resp = post(chatApiUrl + "/api/query", payload);
         if (resp.statusCode() >= 400) {
-            throw new IOException("Ollama /api/generate returned HTTP " + resp.statusCode());
+            throw new IOException("sqlrestapi /api/query returned HTTP " + resp.statusCode());
         }
-        return mapper.readTree(resp.body()).path("response").asText("");
+
+        JsonNode root = mapper.readTree(resp.body());
+        String answer = root.path("answer").asText("");
+
+        List<Map<String, String>> references = new ArrayList<>();
+        for (JsonNode ref : root.path("references")) {
+            Map<String, String> r = new LinkedHashMap<>();
+            r.put("source", ref.path("source").asText(""));
+            r.put("content", ref.path("content").asText(""));
+            references.add(r);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("answer", answer.isBlank() ? "답변을 생성하지 못했습니다." : answer);
+        result.put("references", references);
+        return result;
     }
 
-    private HttpResponse<String> post(String url, JsonNode payload) throws IOException, InterruptedException {
+    private HttpResponse<String> post(String url, ObjectNode payload) throws IOException, InterruptedException {
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .header("Content-Type", "application/json")
                 .timeout(Duration.ofMillis(timeoutMs))

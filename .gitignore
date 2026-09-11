@@ -16,3 +16,8 @@ build/
 
 # 루트에 잘못/임시로 생기는 사본 - 정본은 data/oracle_errors.db
 /oracle_errors.db
+
+# export_error_dictionary_to_jsonl.py 산출물 - data/oracle_errors.db에서 재생성 가능한 데이터
+# 덤프라 repo에 안 둠(sqlrestapi 색인용으로 그때그때 export)
+/error_dictionary_full.jsonl
+/error_dictionary_sample.jsonl

@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Calls the SQL Tune Advisor RAG server (sqltune-rag-java / RAGController, GPU 서버에서 Ollama(bge-m3)로
@@ -75,5 +77,35 @@ public class SqlTuneAdvisorService {
         result.put("answer", answer.isBlank() ? "답변을 생성하지 못했습니다." : answer);
         result.put("references", references);
         return result;
+    }
+
+    /**
+     * sqlrestapi의 /api/query/stream(NDJSON)을 그대로 중계한다. 한 줄이 곧 한 JSON 객체 -
+     * {"chunk": "...", "done": false} 가 토큰마다 오다가 마지막에 {"references": [...]} 한 줄로
+     * 끝난다(RAGController.queryTuningStream 참고). 이 메서드는 그 줄들을 파싱하지 않고 그대로
+     * onLine으로 넘겨주기만 한다 - 형식을 아는 건 호출자(컨트롤러 -> 브라우저)뿐이면 된다.
+     *
+     * HttpClient.send()는 동기 호출이지만 BodyHandlers.ofLines()가 만드는 Stream<String>은 응답
+     * 본문을 즉시 전부 읽어들이는 게 아니라 BufferedReader 위에서 지연 평가되므로, forEach가 도는
+     * 동안 실제로 한 줄씩 도착하는 대로 처리된다 - 토큰 단위 스트리밍이 그대로 살아있다.
+     */
+    public void queryStream(String query, Consumer<String> onLine) throws IOException, InterruptedException {
+        ObjectNode payload = mapper.createObjectNode();
+        payload.put("query", query);
+        payload.put("n_results", 3);
+        payload.put("stream", true);
+
+        HttpRequest req = HttpRequest.newBuilder(URI.create(apiUrl + "/api/query/stream"))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofMillis(timeoutMs))
+                .POST(HttpRequest.BodyPublishers.ofString(payload.toString(), StandardCharsets.UTF_8))
+                .build();
+        HttpResponse<Stream<String>> resp = http.send(req, HttpResponse.BodyHandlers.ofLines());
+        if (resp.statusCode() >= 400) {
+            throw new IOException("SQL Tune Advisor 서버가 HTTP " + resp.statusCode() + "를 반환했습니다.");
+        }
+        try (Stream<String> lines = resp.body()) {
+            lines.forEach(onLine);
+        }
     }
 }
