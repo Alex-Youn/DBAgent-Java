@@ -1,64 +1,81 @@
 # 다음 작업 정리
 
-> 작성 2026-09-07 · 최종 갱신 2026-09-07
+> 작성 2026-09-07 · 최종 갱신 2026-09-11
 > 항목별 상태를 제목에 표시한다(**완료** / **불필요** / 표시 없으면 미착수).
 > 대상: `DBAgent-Java` / `DBAgent-Java-AIX` (2026-08-26 확정 원칙 — 두 프로젝트는 항상 같이 진행)
 
 ---
 
-## 0. 필수 진행 사항 (2026-09-07 지시) — **최우선, 전부 미착수**
+## 0. 필수 진행 사항 (2026-09-07 지시) — **전부 완료 (2026-09-11)**
 
-세션 상세정보가 실제와 다르게 나오는 문제. 데이터 정확성 이슈라 UI 개선보다 우선한다.
-아래 1~3 은 같은 뿌리일 가능성이 있으므로 1 번 원인을 먼저 규명한 뒤 2·3 을 점검한다.
+세션 상세정보가 실제와 다르게 나오는 문제. 데이터 정확성 이슈라 UI 개선보다 우선했다.
+0.1 의 원인이 0.3(성능이력조회/Lock 트리)까지 같이 설명해 줘서, 서버 수정 한 번으로 세 항목이
+함께 해결됐다.
 
-### 0.1 [버그] 트레이스 그래프 드래그 → 세션 클릭 시 엉뚱한 쿼리가 나온다
+### 0.1 [버그] 트레이스 그래프 드래그 → 세션 클릭 시 엉뚱한 쿼리가 나온다 — **완료**
 
 **증상 (사용자 보고):** Current Session 의 트레이스 그래프에서 드래그하면 해당 세션들이 팝업
 목록으로 뜬다. 그 목록의 `command` 항목은 UPDATE 로 표시되는데, 정작 그 세션을 클릭해서 상세정보를
 열면 전혀 상관없는 SELECT 쿼리가 나온다.
 
-**관련 코드 (조사 시작점):**
+**근본 원인 (확인됨):** `MonitorService.getSessionQuery()` 가 클라이언트가 넘긴 `sql_id` 를
+사실상 무시하고 있었다. `sid` 가 살아있는 세션이면 `v$session` 을 다시 조회해 **그 세션이 지금
+실행 중인(또는 직전) SQL** 로 무조건 덮어썼다(`sSqlId = rowSqlId != null ? rowSqlId : sSqlId`).
+드래그 팝업이 넘기는 `sql_id` 는 드래그 시점의 스냅샷인데, 클릭 시점에 서버가 "지금" 상태로
+재조회하니 그 사이 세션이 다음 SQL 을 실행했다면 다른 쿼리가 나올 수밖에 없었다.
 
-| 위치 | 역할 |
-|---|---|
-| `app.js:3219` `scatterPointerToLocal()` | 드래그 좌표 → 차트 로컬 좌표 변환 |
-| `app.js:3336` `showSelectedSessionsPopup()` | 선택된 세션들을 localStorage 에 담고 `session-list.html` 팝업 오픈 |
-| `session-list.html:59,61` | 목록 렌더링. `command` 는 `s.command` 를 `cmdMap` 으로 변환해 표시하고, 행에는 `data-sid` / `data-sql_id` 만 심는다 |
-| `app.js:3170` (전역 click 위임) / `session-list.html:100` | 행 클릭 → `session-detail.html?db_id&sid&sql_id` 팝업 오픈 |
-| `session-detail.html:37` | `/api/session_query?db_id=&sid=&sql_id=` 호출 |
+여기에 더해, 세션 행에 `data-serial` 이 아예 없어서 `/api/session_query` 도 `sid` 만으로
+`v$session` 을 조회했다 — Oracle 은 SID 를 재사용하므로, 원래 세션이 이미 끊기고 다른 세션이 같은
+SID 를 물려받은 경우 완전히 무관한 세션의 SQL 을 보여줄 수 있는 구조였다(두 원인이 겹쳐서 증상을
+더 키웠다).
 
-**확인할 지점 (가설, 미검증):**
+**수정 내용:**
+- `MonitorService.getSessionQuery()` 에 `serial#` 파라미터를 추가해 `WHERE sid=? AND serial#=?`
+  로 세션 정체성을 확인. 클라이언트가 이미 `sql_id` 를 갖고 있으면(드래그 팝업/이력조회/Lock 트리
+  등 스냅샷 기반 클릭) **그 값을 그대로 신뢰**하고 v$session/ASH 로 덮어쓰지 않는다. `sid` 만 있고
+  `sql_id` 가 없는 라이브 행 클릭은 기존처럼 "현재 상태"를 그대로 보여준다(의도된 동작이라 유지).
+  plan 조회용 `child_number` 는 v$sql 에서도 보완 조회하도록 추가.
+- `MonitorController`, `session-list.html`, `session-detail.html`, `app.js`(전역 클릭 위임 +
+  세션 행이 렌더링되는 6곳 전부: Dashboard/Current Session/Active Transaction/Parallel
+  Session/Lock Holder-Waiter Tree/성능이력조회)에 `serial` 전달 경로 추가.
+- `app.js` 캐시버스터 `v=96 → v=98`(0.2 수정 포함).
+- `DBAgent-Java`, `DBAgent-Java-AIX` 양쪽 다 적용, 빌드 확인, `dist`(8006)/`dist`(8007) 재기동
+  검증, `dist-aix` 는 jar 교체만(폐쇄망 전용, 로컬 미기동 원칙 유지).
 
-- 목록은 드래그 시점에 잡힌 스냅샷(`command`, `sql_id`)을 들고 있는데, 상세는 `sid` 로 **다시 조회**한다.
-  그 사이 세션이 다른 SQL 을 실행 중이면 상세에는 "현재 실행 중인 SQL"이 나온다 — 목록의 UPDATE 와
-  상세의 SELECT 가 어긋나는 전형적인 형태다.
-- Oracle SID 는 재사용된다. `serial#` 없이 `sid` 만으로 조회하면 **다른 세션**을 집을 수 있다.
-  행에 `data-serial` 이 없고 API 도 받지 않는 것으로 보이니 이 부분을 먼저 확인할 것.
-- `data-sql_id` 가 비어 있을 때 서버가 `sid` 기준으로 폴백해 무엇을 돌려주는지 확인 필요.
+### 0.2 [개선] 드래그 선택 정확도 — **완료**
 
-**해야 할 일:** 원인 규명 후 수정. 목록에서 클릭한 그 시점의 세션/SQL 이 상세에 그대로 나와야 한다.
+**원래 가설(캔버스 스케일/DPR, 차트 패딩, 스크롤 오프셋)은 전부 이미 정상 처리 중이었다** —
+`scatterPointerToLocal()` 이 zoom 스케일을 이미 보정하고, `getBoundingClientRect()` 는 스크롤을
+자동 보정하며, Chart.js 가 padding 을 스케일 내부에서 처리한다.
 
-### 0.2 [개선] 드래그 선택 정확도
+**실제 원인:** Current Session 의 Trace 차트는 폴링 주기(기본 5 초)마다 x 축 시간창을 앞으로
+밀며 `chart.update()` 로 다시 그린다. 드래그 중(마우스다운~마우스업, 수 초 소요 가능)에도 이
+폴링이 멈추지 않아 화면의 점들이 드래그 도중 옆으로 밀렸다. `mouseup` 의 좌표→값 변환은 **그
+순간의 차트 축 상태** 를 기준으로 계산하므로, 이미 밀린 뒤라 사용자가 본 박스 위치와 실제 선택된
+데이터가 어긋났다.
 
-같은 화면에서 드래그 영역과 실제로 선택되는 세션이 잘 맞지 않는다. 정확도를 높일 것.
-`scatterPointerToLocal()` 의 좌표 변환(캔버스 스케일/DPR, 차트 패딩, 스크롤 오프셋)과
-선택 판정 로직을 함께 볼 것.
+**수정 내용:** `window.scatterDragActive` 플래그를 추가해 드래그 중에는 해당 차트의 시각적
+갱신(축 이동 + `update()`)만 멈추고, 데이터 수집(`scatterDataPoints`)은 계속 진행 — 드래그가
+끝나면 다음 폴링에서 한 번에 따라잡는다. 성능이력조회 탭은 폴링이 아니라 "조회" 버튼으로만
+갱신되는 정적 데이터라 이 문제가 없어 손대지 않았다. 두 프로젝트 모두 적용.
 
-### 0.3 [점검] 오라클 화면의 세션 상세정보 조회가 정확한지 전수 점검
+### 0.3 [점검] 오라클 화면의 세션 상세정보 조회가 정확한지 전수 점검 — **완료**
 
-다음 4개 화면에서 세션 상세정보가 올바른 세션/쿼리를 보여주는지 확인한다.
+Dashboard / Current Session / 성능이력조회 / Lock Holder-Waiter Tree 모두 같은
+`session-list.html → session-detail.html → /api/session_query` 경로를 공유한다는 걸 확인했다.
+0.1 의 서버 수정(클라이언트 sql_id 신뢰 + serial# 확인) 하나로 네 화면 전부 해결됐다 — 별도 수정
+불필요.
 
-- Dashboard
-- Current Session
-- 성능이력조회
-- Lock Holder/Waiter Tree
+### 0.4 [점검] RDB 화면의 세션 상세정보 조회 점검 — **불필요 (조사 결과 해당 없음)**
 
-### 0.4 [점검] RDB 화면의 세션 상세정보 조회 점검
+MySQL / MariaDB / PostgreSQL / MS SQL Server / CUBRID 5개 엔진의 `getSessionDetail()` 을 모두
+확인했다. RDB 화면에는 애초에 Oracle 의 드래그-선택/스냅샷 팝업 같은 기능이 없다 — 행 클릭 시
+바로 `session_id` 로 라이브 조회하고, 세션이 이미 끝났으면 `found:false`("이미 종료되었습니다")
+로 정상 처리한다. 이건 Oracle 의 "라이브 행 클릭"과 같은 구조이며, 그 경로는 원래도 문제없다고
+판단한 패턴이다. 즉 0.1 이 고친 "클라이언트 스냅샷을 서버가 무시" 하는 결함 자체가 RDB 쪽엔
+존재하지 않는다.
 
-MySQL / MariaDB / PostgreSQL / MS SQL Server / CUBRID 대시보드의 세션 상세 보기도 같은 관점에서
-점검한다. 서버측 진입점은 `RdbMonitorController.java:104` 의 `GET /session_detail` 이다.
-
-> 수정은 `DBAgent-Java` / `DBAgent-Java-AIX` **양쪽에 반영**해야 한다(2026-08-26 확정 원칙).
+> 수정은 `DBAgent-Java` / `DBAgent-Java-AIX` **양쪽에 반영**했다(2026-08-26 확정 원칙).
 > monitor / rdb 는 동기화 대상이다(동기화 제외는 `com.dbagent.aidba` 뿐).
 
 ---

@@ -1,0 +1,252 @@
+#PostgreSQL_Active Session
+SELECT 
+    pid,
+    usename,
+    client_addr,
+    application_name,
+    state,
+    wait_event_type,
+    wait_event,
+    ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - query_start))::numeric, 2) AS duration_seconds,
+    LEFT(query, 500) AS query_preview
+FROM pg_stat_activity
+WHERE state IS NOT NULL 
+  AND state != 'idle'               -- idle 세션 제외 (트랜잭션 미종료 idle은 포함)
+  AND pid != pg_backend_pid()       -- 모니터링 쿼리 자체 제외
+ORDER BY query_start ASC NULLS LAST;
+
+#PostgreSQL은 테이블 조인 없이 pg_stat_activity 뷰 하나에 세션 접속 정보와 SQL 전문(query)이 모두 포함
+
+SELECT 
+    pid,                                    -- 세션 식별자 (Oracle의 SID)
+    usename,                                -- 계정
+    client_addr,                            -- 접속 IP
+    application_name,                       -- 프로그램명
+    state,                                  -- 상태 (active, idle 등)
+    ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - query_start))::numeric, 2) AS elapsed_sec,
+    wait_event_type,                        -- 대기 이벤트 타입
+    wait_event,                             -- 대기 이벤트
+    query AS sql_text                       -- 현재 실행 중인 전체 SQL
+FROM pg_stat_activity
+WHERE state != 'idle'                       -- 대기 세션 제외
+  AND pid != pg_backend_pid();              -- 내 쿼리 제외
+  
+# PostgreSQL Lock 모니터링 쿼리
+SELECT 
+    blocked.pid                        AS waiter_pid,
+    blocked.usename                    AS waiter_user,
+    blocked.client_addr               AS waiter_ip,
+    ROUND(EXTRACT(EPOCH FROM (clock_timestamp() - blocked.state_change))::numeric, 2) AS wait_duration_sec,
+    blocked.wait_event_type,
+    blocked.wait_event,
+    LEFT(blocked.query, 300)          AS waiter_query,
+    blocker.pid                        AS blocker_pid,
+    blocker.usename                    AS blocker_user,
+    blocker.state                      AS blocker_state,
+    LEFT(blocker.query, 300)          AS blocker_query
+FROM pg_stat_activity blocked
+JOIN LATERAL UNNEST(pg_blocking_pids(blocked.pid)) AS blocker_pid(pid) ON true
+JOIN pg_stat_activity blocker ON blocker.pid = blocker_pid.pid
+ORDER BY wait_duration_sec DESC;  
+  
+============================================================================
+#MySQL/MariaDB 실시간 세션 리스트 조회
+SELECT 
+    id AS session_id,
+    user,
+    host,
+    db,
+    command,
+    time AS duration_seconds,
+    state,
+    LEFT(info, 500) AS query_preview
+FROM performance_schema.processlist
+WHERE command != 'Sleep'          -- 대기 중(Sleep)인 세션 제외
+  AND id != CONNECTION_ID()       -- 모니터링 세션 제외
+ORDER BY time DESC;
+
+#MySQL/MariaDB PROCESSLIST 테이블에 세션 정보와 실행 쿼리(info 컬럼)가 함께 저장되어 있어 단일 조회.
+
+MySQL 8.0+ 권장 (performance_schema):
+
+SELECT 
+    id AS session_id,                      -- 커넥션 ID
+    user,                                  -- 계정
+    host,                                  -- 접속 IP 및 포트
+    db,                                    -- 현재 DB
+    command,                               -- 실행 명령 유형
+    state,                                 -- 현재 처리 상태
+    time AS elapsed_sec,                   -- 실행 지속 시간(초)
+    info AS sql_text                       -- 현재 실행 중인 전체 SQL
+FROM performance_schema.processlist
+WHERE command != 'Sleep'                   -- 대기 세션 제외
+  AND id != CONNECTION_ID();
+
+# MySQL 8.0부터는 performance_schema의 data_lock_waits와 세션 스레드 정보를 조인하여 대기 관계를 확인
+
+SQL
+SELECT 
+    w_th.processlist_id                  AS waiter_session_id,
+    w_th.processlist_user                AS waiter_user,
+    w_th.processlist_host                AS waiter_host,
+    w.requesting_engine_transaction_id   AS waiter_trx_id,
+    w.requested_lock_mode                AS requested_mode,
+    LEFT(w_th.processlist_info, 300)    AS waiter_query,
+    b_th.processlist_id                  AS blocker_session_id,
+    b_th.processlist_user                AS blocker_user,
+    b.blocking_engine_transaction_id     AS blocker_trx_id,
+    b.blocking_lock_mode                 AS blocker_mode,
+    LEFT(b_th.processlist_info, 300)    AS blocker_query
+FROM performance_schema.data_lock_waits w
+JOIN performance_schema.data_locks b 
+    ON w.blocking_engine_lock_id = b.engine_lock_id
+JOIN performance_schema.threads w_th 
+    ON w.requesting_thread_id = w_th.thread_id
+JOIN performance_schema.threads b_th 
+    ON b.blocking_thread_id = b_th.thread_id;
+간단한 조회용 내장 뷰: SELECT * FROM sys.innodb_lock_waits;
+
+#MariaDB (또는 MySQL 5.7 이하)
+MariaDB는 InnoDB 표준 카탈로그(information_schema)를 활용해 대기 관계를 매핑
+
+SQL
+SELECT 
+    w_p.id                               AS waiter_session_id,
+    w_p.user                             AS waiter_user,
+    w_p.host                             AS waiter_host,
+    w_p.time                             AS wait_duration_sec,
+    w_l.lock_mode                        AS requested_mode,
+    w_l.lock_table                       AS target_table,
+    LEFT(w_p.info, 300)                  AS waiter_query,
+    b_p.id                               AS blocker_session_id,
+    b_p.user                             AS blocker_user,
+    b_l.lock_mode                        AS holding_mode,
+    LEFT(b_p.info, 300)                  AS blocker_query
+FROM information_schema.innodb_lock_waits w
+JOIN information_schema.innodb_locks b_l 
+    ON w.blocking_lock_id = b_l.lock_id
+JOIN information_schema.innodb_trx b_t 
+    ON b_l.lock_trx_id = b_t.trx_id
+JOIN information_schema.processlist b_p 
+    ON b_t.trx_mysql_thread_id = b_p.id
+JOIN information_schema.innodb_locks w_l 
+    ON w.requesting_lock_id = w_l.lock_id
+JOIN information_schema.innodb_trx w_t 
+    ON w_l.lock_trx_id = w_t.trx_id
+JOIN information_schema.processlist w_p 
+    ON w_t.trx_mysql_thread_id = w_p.id
+ORDER BY w_p.time DESC;
+
+
+=================================================
+
+#MS SQL Server 실시간 세션 리스트조회
+SELECT 
+    r.session_id,
+    s.login_name,
+    s.host_name,
+    s.program_name,
+    r.status,
+    r.command,
+    r.cpu_time,
+    r.total_elapsed_time / 1000.0 AS duration_seconds,
+    r.wait_type,
+    r.wait_time,
+    LEFT(t.text, 500) AS query_preview
+FROM sys.dm_exec_requests r
+INNER JOIN sys.dm_exec_sessions s 
+    ON r.session_id = s.session_id
+OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE s.is_user_process = 1
+  AND r.session_id != @@SPID        -- 모니터링 세션 제외
+ORDER BY r.total_elapsed_time DESC;
+
+#특정 세션 클릭시 팝업창으로  세션 정보를 담은 sys.dm_exec_sessions와 실행 요청을 담은 sys.dm_exec_requests를 조인하고, 동적 함수(sys.dm_exec_sql_text)를 통해 SQL 전문 조회쿼리.
+
+SELECT 
+    s.session_id,                           -- 세션 식별자 (Oracle의 SID)
+    s.login_name,                           -- 계정
+    s.host_name,                            -- 접속 머신
+    s.program_name,                         -- 클라이언트 프로그램
+    r.status,                               -- 요청 상태
+    r.total_elapsed_time / 1000.0 AS elapsed_sec,
+    r.wait_type,                            -- 대기 이벤트
+    t.text AS sql_text                      -- 현재 실행 중인 전체 SQL
+FROM sys.dm_exec_sessions s
+INNER JOIN sys.dm_exec_requests r 
+    ON s.session_id = r.session_id
+OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) t
+WHERE s.is_user_process = 1
+  AND s.session_id != @@SPID;
+
+
+# MS SQL Server Lock 모니터링 쿼리
+SELECT 
+    wt.session_id                          AS waiter_session_id,
+    s_w.login_name                         AS waiter_user,
+    wt.wait_duration_ms / 1000.0           AS wait_duration_sec,
+    wt.wait_type,
+    LEFT(t_w.text, 300)                   AS waiter_query,
+    wt.blocking_session_id                 AS blocker_session_id,
+    s_b.login_name                         AS blocker_user,
+    LEFT(t_b.text, 300)                   AS blocker_query
+FROM sys.dm_os_waiting_tasks wt
+INNER JOIN sys.dm_exec_sessions s_w 
+    ON wt.session_id = s_w.session_id
+INNER JOIN sys.dm_exec_requests r_w 
+    ON wt.session_id = r_w.session_id
+OUTER APPLY sys.dm_exec_sql_text(r_w.sql_handle) t_w
+INNER JOIN sys.dm_exec_sessions s_b 
+    ON wt.blocking_session_id = s_b.session_id
+LEFT JOIN sys.dm_exec_requests r_b 
+    ON wt.blocking_session_id = r_b.session_id
+OUTER APPLY sys.dm_exec_sql_text(r_b.sql_handle) t_b
+WHERE wt.blocking_session_id IS NOT NULL
+  AND wt.blocking_session_id != 0;
+
+============================================================
+대시보드에
+# Active Session과 Lock(블로킹 체인)
+
+# 모니터링 화면에 추가 해야 할부분
+실시간 DB 대시보드를 구성할 때 Active Session과 Lock(블로킹 체인) 외에 반드시 함께 올려두어야 하는 핵심 지표들입니다.
+
+# 1. 커넥션 풀 고갈율 (Connection Pool Usage)
+  WAS 커넥션 풀 누수나 트래픽 급증 시 서비스 장애로 직결되는 1순위 지표입니다.
+
+   표시 방식: 게이지 차트 (현재 커넥션 수 / 최대 허용 커넥션 수, Max Connections)
+
+# DBMS별 확인 대상:
+  PostgreSQL: pg_stat_activity 카운트 / SHOW max_connections;
+  MySQL / MariaDB: Threads_connected / SHOW VARIABLES LIKE 'max_connections';
+  MS SQL Server: sys.dm_exec_connections 카운트 / user options
+
+#. 방치된 장기 트랜잭션 (Long-Running Transactions / Idle in Transaction)
+   락을 직접 걸지 않더라도 트랜잭션을 열어둔 채 방치하면 Undo/WAL/트랜잭션 로그가 정리되지 않아 디스크 풀 장애나 테이블 블로트(Bloat)를 유발합니다.
+   표시 방식: 임계치(예: 60초 이상)를 초과한 트랜잭션 수치 및 경고 뱃지
+
+# DBMS별 확인 대상:
+    PostgreSQL: xact_start 기준 시간 경과 세션, 특히 state = 'idle in transaction'
+    MySQL / MariaDB: information_schema.innodb_trx의 trx_started 경과 시간
+    MS SQL Server: sys.dm_tran_active_transactions 및 sys.dm_tran_session_transactions
+
+# 리플리케이션 지연 시간 (Replication / Standby Lag)
+HA(고가용성) 이중화 구성이나 읽기 분산 복제본(Read Replica)을 둘 때 데이터 동기화 지연을 감지합니다.
+
+표시 방식: 지연 시간(Seconds) 또는 바이트 단위 차이(Lag Size)
+
+#DBMS별 확인 대상:
+  PostgreSQL: pg_stat_replication의 write_lag, flush_lag, replay_lag
+  MySQL / MariaDB: SHOW REPLICA STATUS (또는 SHOW SLAVE STATUS)의 Seconds_Behind_Source
+  MS SQL Server: Always On 환경의 sys.dm_hadr_database_replica_states의 log_send_queue_size, redo_queue_size
+
+#버퍼 캐시 히트율 (Buffer Cache Hit Ratio)
+ 쿼리가 메모리(Buffer Pool/Shared Buffers)에서 해결되는지, 물리 디스크 I/O를 일으키고 있는지 확인하는 지표입니다. (보통 95~99% 유지가 정상)
+ 표시 방식: 실시간 백분율(%) 트렌드 선 그래프
+  급감 시 의미: 대량 풀스캔 쿼리 유입으로 기존 메모리 캐시가 밀려나 디스크 I/O 병목 발생 중임을 의미
+
+# 임시 공간 및 로그 용량 (Temp Space & Transaction Log)
+ 정렬(ORDER BY, GROUP BY) 작업이 메모리를 초과해 디스크를 쓰거나, 대량 배치 작업으로 로그 영역이 차오르는 상태를 감지합니다.
+  PostgreSQL: pg_stat_database의 temp_bytes, temp_files
+  MySQL / MariaDB: Created_tmp_disk_tables (디스크 기반 임시 테이블 생성 수)
+  MS SQL Server: tempdb 여유 공간 (sys.dm_db_file_space_usage) 및 트랜잭션 로그(sys.dm_os_performance_counters의 Percent Log Used)

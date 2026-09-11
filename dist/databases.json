@@ -163,5 +163,19 @@
       "pool_min_idle" : null,
       "pool_max_size" : null
     } ]
+  }, {
+    "group_name" : "CUBRID",
+    "instances" : [ {
+      "id" : "docker_cubrid",
+      "name" : "CUBRID(docker)",
+      "db_type" : "cubrid",
+      "host" : "127.0.0.1",
+      "port" : 33000,
+      "sid" : "cubdb",
+      "user" : "dba",
+      "password" : "B64(VGVzdDEyMzQh)",
+      "pool_min_idle" : null,
+      "pool_max_size" : null
+    } ]
   } ]
 }
