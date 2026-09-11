@@ -21,3 +21,16 @@ build/
 # 덤프라 repo에 안 둠(sqlrestapi 색인용으로 그때그때 export)
 /error_dictionary_full.jsonl
 /error_dictionary_sample.jsonl
+
+# 런타임 산출물 - 앱이 돌면서 계속 바뀌어 git pull 을 막았음(2026-09-11 추적 해제).
+# users.db 는 로그인 계정/세션 데이터라 환경마다 달라야 하는 파일이기도 하다.
+# 주의: data/oracle_errors.db(에러사전 9,372건)는 정상 데이터이므로 절대 여기 걸리면 안 된다
+#       - 그래서 *.db 같은 넓은 패턴 대신 경로를 하나씩 좁게 지정한다.
+/users.db
+/dist/users.db
+/dbagent-java.out.log
+/dbagent-java.err.log
+/dist/dbagent-java.out.log
+/dist/dbagent-java.err.log
+/dist/dbagent-java.pid
+/run.log
