@@ -3986,10 +3986,8 @@ let historySortAsc = true;
         });
     }
 
-    // 실행계획/실제 실행 통계 자동 조회 (관리자 전용)
+    // 바인드 변수 자동 조회 (관리자 전용, 1차 성능점검에서 사용)
     const sqlTuningAccountSelect = document.getElementById('sqltuning-account-select');
-    const sqlTuningAutoBtn = document.getElementById('sqltuning-auto-btn');
-    const sqlTuningAutoActualBtn = document.getElementById('sqltuning-auto-actual-btn');
     const sqlTuningBindPanel = document.getElementById('sqltuning-bind-panel');
     const sqlTuningBindFields = document.getElementById('sqltuning-bind-fields');
     const sqlTuningBindToggleBtn = document.getElementById('sqltuning-bind-toggle-btn');
@@ -4120,65 +4118,7 @@ let historySortAsc = true;
         }
     };
 
-    function runSqlTuningAutoMode(btn, endpoint, loadingMsg, planLabel) {
-        const query = sqlTuningInput.value.trim();
-        if (!query || btn.disabled) return;
-
-        btn.disabled = true;
-        sqlTuningResult.innerHTML = `<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);"><i data-lucide="loader-2" class="spinning"></i> ${loadingMsg}</div>`;
-        if (typeof lucide !== 'undefined') lucide.createIcons({root: sqlTuningResult});
-
-        fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                db_id: window.currentDbId || '',
-                account: sqlTuningAccountSelect ? sqlTuningAccountSelect.value : '',
-                token: getToken(),
-                query: query,
-                binds: sqlTuningBindValues
-            })
-        })
-        .then(res => res.json())
-        .then(data => {
-            btn.disabled = false;
-            if (data.success === false) {
-                sqlTuningResult.innerHTML = `<div style="color: #d03b3b;">${data.message || '분석 중 오류가 발생했습니다.'}</div>`;
-                return;
-            }
-            const formatted = formatSqlTuningAnswer(data.answer);
-            const planHtml = data.plan
-                ? `<div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.8rem; color: var(--text-muted); cursor: pointer;" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">[+] ${planLabel}</div><div style="display: none; font-size: 0.8rem; color: var(--text-muted); background: var(--bg-card); padding: 10px; border-radius: 4px; margin-top: 5px; white-space: pre-wrap; font-family: 'Consolas', 'D2Coding', monospace;">${data.plan}</div>`
-                : '';
-            sqlTuningResult.innerHTML = `<div style="line-height: 1.6;">${formatted}</div>${planHtml}`;
-        })
-        .catch(() => {
-            btn.disabled = false;
-            sqlTuningResult.innerHTML = '<div style="color: #d03b3b;">서버 통신 오류가 발생했습니다.</div>';
-        });
-    }
-
-    if (sqlTuningAutoBtn && sqlTuningInput && sqlTuningResult) {
-        sqlTuningAutoBtn.addEventListener('click', () => runSqlTuningAutoMode(
-            sqlTuningAutoBtn, '/api/sqltuning/analyze_from_query',
-            '실행계획 조회 중... (이어서 모델 분석까지 최대 1분 정도 소요될 수 있습니다)',
-            '조회된 실행계획 원문 보기 (EXPLAIN PLAN, 추정치)'
-        ));
-    }
-
-    if (sqlTuningAutoActualBtn && sqlTuningInput && sqlTuningResult) {
-        sqlTuningAutoActualBtn.addEventListener('click', () => {
-            const query = sqlTuningInput.value.trim();
-            if (!query) return;
-            runSqlTuningAutoMode(
-                sqlTuningAutoActualBtn, '/api/sqltuning/analyze_from_query_actual',
-                '쿼리를 실제로 실행 중... (이어서 모델 분석까지 최대 1분 정도 소요될 수 있습니다)',
-                '조회된 실행계획 원문 보기 (DISPLAY_CURSOR, 실측치)'
-            );
-        });
-    }
-
-    // 1차 성능점검 - "실제 실행 통계로 분석"과 같은 실행계획/실측 통계를 얻지만 sLLM(FastAPI) 호출 없이
+    // 1차 성능점검 - 실행계획/실측 통계를 얻지만 sLLM(FastAPI) 호출 없이
     // 그대로 바로 보여줌 (AI 분석 전에 DBA가 눈으로 먼저 훑어보는 용도, 훨씬 빠름).
     const sqlTuningQuickCheckBtn = document.getElementById('sqltuning-quickcheck-btn');
     if (sqlTuningQuickCheckBtn && sqlTuningInput && sqlTuningResult) {
@@ -4285,33 +4225,81 @@ let historySortAsc = true;
                 </div>`;
     }
 
-    const run = () => {
+    // 스트리밍 중에는 완성된 마크다운 서식을 매 토큰마다 다시 파싱하지 않는다 - 코드펜스(```)처럼
+    // 아직 안 닫힌 마크업이 매 청크마다 다르게 깨져 보이는 걸 피하려고, 진행 중엔 이스케이프만 한
+    // 원문을 그대로 누적해서 보여주고(줄바꿈만 <br/>로), 스트림이 끝난("done") 뒤에야
+    // formatAdvisorAnswer로 한 번에 다시 그린다. 이 두 단계 렌더링 덕분에 "한 글자씩 생성되는" 효과와
+    // 최종 결과의 서식(헤더/코드블록/굵게) 둘 다 챙길 수 있다.
+    function run() {
         const text = input.value.trim();
         if (!text || runBtn.disabled) return;
 
         runBtn.disabled = true;
-        resultEl.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary);"><i data-lucide="loader-2" class="spinning"></i> 사내 튜닝 사례를 검색하고 분석 중입니다...</div>';
+        resultEl.innerHTML = '<div style="display: flex; align-items: center; gap: 8px; color: var(--text-secondary); margin-bottom: 12px;"><i data-lucide="loader-2" class="spinning"></i> 사내 튜닝 사례를 검색하고 분석 중입니다...</div><div id="sqltuneadvisor-stream" style="white-space: pre-wrap; line-height: 1.6;"></div>';
         if (typeof lucide !== 'undefined') lucide.createIcons({root: resultEl});
+        const streamEl = document.getElementById('sqltuneadvisor-stream');
 
-        fetch('/api/sqltuneadvisor/query', {
+        let answerText = '';
+        let references = null;
+        let sawError = false;
+
+        const finish = () => {
+            runBtn.disabled = false;
+            if (sawError) return;
+            resultEl.innerHTML = `<div style="line-height: 1.6;">${formatAdvisorAnswer(answerText)}${formatReferences(references || [])}</div>`;
+        };
+
+        const handleLine = (line) => {
+            if (!line.trim()) return;
+            let obj;
+            try { obj = JSON.parse(line); } catch (e) { return; }
+            if (obj.error) {
+                sawError = true;
+                runBtn.disabled = false;
+                resultEl.innerHTML = `<div style="color: #d03b3b;">${escapeHtml(obj.error)}</div>`;
+                return;
+            }
+            if (typeof obj.chunk === 'string' && obj.chunk) {
+                answerText += obj.chunk;
+                streamEl.textContent = answerText;
+            }
+            if (obj.references !== undefined) {
+                references = obj.references;
+            }
+        };
+
+        fetch('/api/sqltuneadvisor/query/stream', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: text })
         })
-        .then(res => res.json())
-        .then(data => {
-            runBtn.disabled = false;
-            if (data.success === false) {
-                resultEl.innerHTML = `<div style="color: #d03b3b;">${escapeHtml(data.message || '분석 중 오류가 발생했습니다.')}</div>`;
-                return;
-            }
-            resultEl.innerHTML = `<div style="line-height: 1.6;">${formatAdvisorAnswer(data.answer)}${formatReferences(data.references)}</div>`;
+        .then(res => {
+            if (!res.ok || !res.body) throw new Error('스트리밍 응답을 받지 못했습니다.');
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder('utf-8');
+            let buffer = '';
+
+            const pump = () => reader.read().then(({ done, value }) => {
+                if (done) {
+                    if (buffer.trim()) handleLine(buffer);
+                    finish();
+                    return;
+                }
+                buffer += decoder.decode(value, { stream: true });
+                let idx;
+                while ((idx = buffer.indexOf('\n')) >= 0) {
+                    handleLine(buffer.slice(0, idx));
+                    buffer = buffer.slice(idx + 1);
+                }
+                return pump();
+            });
+            return pump();
         })
         .catch(() => {
             runBtn.disabled = false;
             resultEl.innerHTML = '<div style="color: #d03b3b;">서버 통신 오류가 발생했습니다. (SQL Tune Advisor 서버가 켜져 있는지 확인하세요)</div>';
         });
-    };
+    }
 
     runBtn.addEventListener('click', run);
     input.addEventListener('keydown', (e) => {

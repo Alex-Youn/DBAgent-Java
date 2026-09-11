@@ -92,6 +92,16 @@
 # 응답 대기 한도(ms). 프롬프트 길이와 GPU 성능에 따라 편차가 크다.
 #sqltuning.api.timeout-ms=180000
 
+# ── SQL Tune Advisor (사내 튜닝 사례 RAG 검색 + LLM 분석) ────────────────
+# sqltuning.*(자체 파인튜닝 sLLM)과는 별개의 서버/연동이다 - 이쪽은 bge-m3 임베딩으로 사내 튜닝
+# 사례를 OpenSearch에서 검색한 뒤 그 사례를 근거로 qwen3-coder:30b가 답변한다
+# (sqltune-rag-java/RAGController 호출). 기본값이 localhost라 이 호스트에 서버가 없으면
+# 설정을 빠뜨렸을 때 조용히 실패한다.
+#sqltuneadvisor.api.url=http://localhost:9300
+# 응답 대기 한도(ms). GPU 서버 성능과 검색된 사내 사례 분량에 따라 편차가 커서
+# sqltuning.* 과 동일하게 설정으로 뺐다.
+#sqltuneadvisor.api.timeout-ms=180000
+
 # ── SQL Runner (AI DBA 탭의 "SQL 실행") 상한 ─────────────────────────────
 # max-rows 는 사용자가 건수를 지정하지 않았을 때의 기본값,
 # max-rows-limit 은 사용자가 지정하더라도 넘을 수 없는 절대 상한선이다.
