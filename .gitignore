@@ -5,5 +5,14 @@
 /maven39/lib/*.jar
 /target/*.jar
 /dist/*.jar
+*.jar.bak
 .gradle/
 build/
+
+# sqltune-rag 프로토타입/이관본 - JDK+Maven 번들 포함(수백MB), 별도 관리 대상이라 repo에 안 둠
+/sqltune-rag/
+/sqltune-rag-java/
+*.zip
+
+# 루트에 잘못/임시로 생기는 사본 - 정본은 data/oracle_errors.db
+/oracle_errors.db
