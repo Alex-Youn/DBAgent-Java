@@ -59,9 +59,17 @@ public class OllamaChatService {
     public String ask(String prompt, String context) throws IOException, InterruptedException {
         String finalPrompt = "[참고 자료]\n" + context + "\n\n[사용자 질문]\n" + prompt
                 + "\n\n반드시 한국어로 답하세요.";
+        return askWithPrompt(PROMPT_ID, finalPrompt);
+    }
 
+    /**
+     * RAG 검색 없이 완성된 프롬프트를 그대로 sqlrestapi(promptId별 시스템 프롬프트)에 던진다. AI Current
+     * SQL 분석(promptId=current-sql, 매뉴통합.md 2-1)처럼 눈앞의 실측치를 해석하는 작업 - 사내 사례를
+     * 찾는 게 아니므로 인덱스 검색이 필요 없는 화면들이 공용으로 쓴다.
+     */
+    public String askWithPrompt(String promptId, String finalPrompt) throws IOException, InterruptedException {
         ObjectNode payload = mapper.createObjectNode();
-        payload.put("promptId", PROMPT_ID);
+        payload.put("promptId", promptId);
         payload.put("prompt", finalPrompt);
 
         HttpResponse<String> resp = post(chatApiUrl + "/api/chat", payload);
@@ -105,6 +113,27 @@ public class OllamaChatService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("answer", answer.isBlank() ? "답변을 생성하지 못했습니다." : answer);
         result.put("references", references);
+        return result;
+    }
+
+    /**
+     * 좌측 프레임 상단 모델명 표시용(매뉴통합.md 3절). sqlrestapi의 isConnected()가 타임아웃 없이
+     * OpenSearch 응답을 무한정 기다릴 수 있어(sqlrestapi 개선 후보, 이 저장소 밖) 여기서라도 짧은
+     * 타임아웃(5초)을 걸어 화면이 멈추지 않게 한다 - 실패하면 호출자가 표시를 생략한다.
+     */
+    public Map<String, Object> health() throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(chatApiUrl + "/health"))
+                .timeout(Duration.ofSeconds(5))
+                .GET()
+                .build();
+        HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (resp.statusCode() >= 400) {
+            throw new IOException("sqlrestapi /health returned HTTP " + resp.statusCode());
+        }
+        JsonNode root = mapper.readTree(resp.body());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("llm_model", root.path("llm_model").asText(""));
+        result.put("vector_db", root.path("vector_db").asText(""));
         return result;
     }
 
