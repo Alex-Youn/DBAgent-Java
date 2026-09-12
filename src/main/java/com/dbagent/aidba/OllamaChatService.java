@@ -3,14 +3,18 @@ package com.dbagent.aidba;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -38,6 +42,8 @@ import java.util.Map;
 @Service
 public class OllamaChatService {
 
+    private static final Logger log = LoggerFactory.getLogger(OllamaChatService.class);
+
     private static final String PROMPT_ID = "chatbot";
     private static final String ERROR_INDEX = "error_dictionary";
 
@@ -54,6 +60,29 @@ public class OllamaChatService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
     private final ObjectMapper mapper = new ObjectMapper();
+
+    /** 연결 실패 안내에 대상 주소를 함께 보여주려고 컨트롤러가 읽는다(SqlTuneAdvisorService.apiUrl()과 같은 용도). */
+    public String apiUrl() {
+        return chatApiUrl;
+    }
+
+    /**
+     * SqlTuningController/SqlTuneAdvisorController의 modelErrorMessage()와 같은 이유로 둔다 - 이 문자열은
+     * 화면에 그대로 빨간 글씨로 나가므로 원시 예외("HTTP/1.1 header parser received no bytes" 등)를
+     * 흘리면 안 된다. 서버가 안 떠 있는 건 운영 중 흔한 상황이라 다음 행동을 알려주는 안내문으로
+     * 바꾸고 원인은 로그로만 남긴다. sqlrestapi를 호출하는 화면들(AI Current SQL 분석, AI SQL 작성기)이 공유한다.
+     */
+    public String friendlyErrorMessage(String what, Exception e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConnectException || cause instanceof HttpTimeoutException) {
+                log.warn("sqlrestapi 연결 실패 (url={}): {}", chatApiUrl, e.toString());
+                return "AI 서버(" + chatApiUrl + ")에 연결할 수 없습니다. "
+                        + "서버가 켜져 있는지, 이 호스트에서 도달 가능한 주소인지 확인해주세요.";
+            }
+        }
+        log.warn("sqlrestapi {} 실패", what, e);
+        return what + " 중 오류가 발생했습니다: " + e.getMessage();
+    }
 
     /** 검색 없이 컨텍스트(caller가 이미 조립)를 그대로 붙여 답변만 받는다 - ORA 코드 정확 일치 경로. */
     public String ask(String prompt, String context) throws IOException, InterruptedException {
