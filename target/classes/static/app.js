@@ -3916,8 +3916,9 @@ let historySortAsc = true;
                     // 원문은 본문과 같은 0.95rem 에 본문 색(text-main)으로 올렸다. DB 에서 가져온 매뉴얼은
                     // 자리 맞춤이 있는 텍스트라 등폭 글꼴 + 넉넉한 줄간격으로 두고, 길어질 수 있어
                     // max-height 를 줘서 말풍선이 아니라 이 블록 안에서만 스크롤되게 한다.
-                    const srcLabel = '검색된 에러 매뉴얼 원문';
-                    sourceHtml = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.9rem; font-weight: 600; color: var(--primary); cursor: pointer; user-select: none;" onclick="var b=this.nextElementSibling; var willOpen=(b.style.display==='none'); b.style.display=willOpen?'block':'none'; this.textContent=(willOpen?'[-] ':'[+] ')+'${srcLabel}';">[+] ${srcLabel}</div><div style="display: none; font-size: 0.95rem; line-height: 1.7; color: var(--text-main); background: var(--bg-main); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: 6px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-family: 'D2Coding', Consolas, 'Courier New', monospace; max-height: 320px; overflow-y: auto;">${data.context_used}</div>`;
+                    // 2026-09-13 사용자 요청: 첨부 문서는 답변 끝에 바로 보여야 하므로 기본 펼침 상태로 변경.
+                    const srcLabel = '첨부 문서';
+                    sourceHtml = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-color); font-size: 0.9rem; font-weight: 600; color: var(--primary); cursor: pointer; user-select: none;" onclick="var b=this.nextElementSibling; var willOpen=(b.style.display==='none'); b.style.display=willOpen?'block':'none'; this.textContent=(willOpen?'[-] ':'[+] ')+'${srcLabel}';">[-] ${srcLabel}</div><div style="display: block; font-size: 0.95rem; line-height: 1.7; color: var(--text-main); background: var(--bg-main); border: 1px solid var(--border-color); padding: 12px 14px; border-radius: 6px; margin-top: 8px; white-space: pre-wrap; word-break: break-word; font-family: 'D2Coding', Consolas, 'Courier New', monospace; max-height: 320px; overflow-y: auto;">${data.context_used}</div>`;
                 }
 
                 aiMsg.innerHTML = `<div style="background: var(--bg-card); padding: 12px; border-radius: 8px; max-width: 80%; border-left: 4px solid var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); line-height: 1.6;">${formattedAnswer}${sourceHtml}</div>`;
@@ -4246,7 +4247,11 @@ let historySortAsc = true;
                 // current-sql.md 는 "### 1. 실측 요약" 같은 마크다운 4단 구조를 강제하므로 줄바꿈만
                 // 바꾸는 formatSqlTuningAnswer(자체 sLLM 화면용) 로는 ###/``` 가 그대로 보인다.
                 const formatted = formatAiMarkdownAnswer(data.answer);
-                analysisEl.innerHTML = `<div style="line-height: 1.6; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);">${formatted}</div>`;
+                analysisEl.innerHTML = '';
+                const analysisWrapper = document.createElement('div');
+                analysisWrapper.style.cssText = 'line-height: 1.6; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border-color);';
+                analysisEl.appendChild(analysisWrapper);
+                typeHtmlInto(analysisWrapper, formatted);
             })
             .catch(() => {
                 tunnerCurrentAnalyzeBtn.disabled = false;
@@ -4286,6 +4291,23 @@ let historySortAsc = true;
     const PLACEHOLDER_HTML = '<div style="color: var(--text-secondary); text-align: center; margin-top: 30px;">쿼리나 튜닝하고 싶은 상황을 입력하고 분석을 실행해주세요.</div>';
 
     const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // 스트리밍 중 el을 담고 있는 실제 스크롤 컨테이너를 찾아 바닥까지 내린다. 이 탭(#tab-tunner-perf)도
+    // AI Current SQL 분석과 같은 좌측 트리 메뉴 레이아웃이라 고정 높이 + overflow-y:auto라, 청크가
+    // 쌓여 내용이 늘어나도 자동으로 스크롤이 안 따라가면 사용자가 매번 직접 끌어내려야 한다.
+    function scrollToBottomOf(el) {
+        let node = el.parentElement;
+        while (node && node !== document.body) {
+            const overflowY = getComputedStyle(node).overflowY;
+            if (overflowY === 'auto' || overflowY === 'scroll') {
+                node.scrollTop = node.scrollHeight;
+                return;
+            }
+            node = node.parentElement;
+        }
+        const fallback = document.scrollingElement || document.documentElement;
+        fallback.scrollTop = fallback.scrollHeight;
+    }
 
     // System Prompt 가 요구하는 답변 포맷(### 헤더, ```sql 코드블록, **굵게**, - 글머리)만 가볍게
     // HTML로 바꾼다 - 정식 마크다운 파서가 아니라 이 화면에서 실제로 나오는 패턴에 맞춘 간이 변환.
@@ -4346,6 +4368,7 @@ let historySortAsc = true;
             runBtn.disabled = false;
             if (sawError) return;
             resultEl.innerHTML = `<div style="line-height: 1.6;">${formatAdvisorAnswer(answerText)}${formatReferences(references || [])}</div>`;
+            scrollToBottomOf(resultEl);
         };
 
         const handleLine = (line) => {
@@ -4361,6 +4384,7 @@ let historySortAsc = true;
             if (typeof obj.chunk === 'string' && obj.chunk) {
                 answerText += obj.chunk;
                 streamEl.textContent = answerText;
+                scrollToBottomOf(streamEl);
             }
             if (obj.references !== undefined) {
                 references = obj.references;
@@ -4639,6 +4663,93 @@ let historySortAsc = true;
     function extractSqlWriterCode(answer) {
         const m = /```(?:sql)?\r?\n([\s\S]*?)```/i.exec(answer || '');
         return m ? m[1].trim() : null;
+    }
+
+    // container의 조상 중 실제로 스크롤되는 엘리먼트를 찾는다. AI Current SQL 분석 패널은 좌측 트리
+    // 메뉴 레이아웃(AI SQL Tunner 트리 메뉴, 2026-09) 때문에 페이지 전체가 아니라 `#tab-tunner-current`
+    // (고정 높이 + overflow-y:auto)가 실제 스크롤 경계다 - `.main-content`를 스크롤해도 이 안쪽 패널은
+    // 바닥까지 내려가지 않는다(실측: main-content만 스크롤 시 tab-tunner-current.scrollTop이 0에
+    // 머무름). 클래스명을 하드코딩하는 대신 overflow-y:auto인 첫 조상을 찾아야 다른 화면에 재사용해도
+    // 맞는 스크롤 박스를 잡는다.
+    function findScrollParent(el) {
+        let node = el.parentElement;
+        while (node && node !== document.body) {
+            const overflowY = getComputedStyle(node).overflowY;
+            if (overflowY === 'auto' || overflowY === 'scroll') {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    // AI Current SQL 분석(성능분석)의 타이핑 효과 - formatAiMarkdownAnswer가 만든 HTML을 한 번에
+    // innerHTML로 꽂는 대신, 태그 구조는 그대로 유지한 채 텍스트만 한 글자씩 흘려 넣는다(순수 문자열
+    // 타이핑이면 태그가 중간에 잘려 그대로 노출된다 - 예: "<div style=" 가 화면에 텍스트로 보임).
+    // 매 틱마다 실제 스크롤 컨테이너를 바닥까지 내려서 글씨가 늘어나는 동안 자동으로 따라 내려가게 한다.
+    function typeHtmlInto(container, html, opts) {
+        opts = opts || {};
+        const charsPerTick = opts.charsPerTick || 3;
+        const intervalMs = opts.intervalMs || 16;
+        const scrollContainer = findScrollParent(container);
+
+        const source = document.createElement('div');
+        source.innerHTML = html;
+
+        const queue = [];
+        function walk(node) {
+            if (node.nodeType === Node.TEXT_NODE) {
+                for (const ch of node.textContent) {
+                    queue.push({ type: 'char', ch });
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                queue.push({ type: 'open', tag: node.tagName, attrs: Array.from(node.attributes) });
+                node.childNodes.forEach(walk);
+                queue.push({ type: 'close' });
+            }
+        }
+        Array.from(source.childNodes).forEach(walk);
+
+        container.innerHTML = '';
+        const stack = [container];
+        let idx = 0;
+
+        function step() {
+            // container가 DOM에서 떨어져나갔으면(재클릭으로 innerHTML이 갈아치워졌거나 화면 클리어) 이
+            // 루프를 멈춘다 - 안 그러면 고아가 된 타이머가 계속 살아서 실제 화면의 scrollContainer를
+            // 매 틱마다 바닥으로 강제로 끌어내려, 사용자가 새 내용을 보다가도 스크롤이 붙잡힌다.
+            if (!container.isConnected) {
+                return;
+            }
+            let charsThisTick = 0;
+            while (idx < queue.length && charsThisTick < charsPerTick) {
+                const item = queue[idx++];
+                const parent = stack[stack.length - 1];
+                if (item.type === 'open') {
+                    const el = document.createElement(item.tag);
+                    item.attrs.forEach(a => el.setAttribute(a.name, a.value));
+                    parent.appendChild(el);
+                    stack.push(el);
+                } else if (item.type === 'close') {
+                    stack.pop();
+                } else {
+                    const last = parent.lastChild;
+                    if (last && last.nodeType === Node.TEXT_NODE) {
+                        last.textContent += item.ch;
+                    } else {
+                        parent.appendChild(document.createTextNode(item.ch));
+                    }
+                    charsThisTick++;
+                }
+            }
+            if (scrollContainer) {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+            if (idx < queue.length) {
+                setTimeout(step, intervalMs);
+            }
+        }
+        step();
     }
 
     // AI SQL 작성기/AI Current SQL 분석의 답변 렌더러. 두 프롬프트(sql-writer.md, current-sql.md) 모두

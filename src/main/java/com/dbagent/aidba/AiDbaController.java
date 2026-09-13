@@ -74,7 +74,7 @@ public class AiDbaController {
             }
             return ResponseEntity.ok(body);
         } catch (Exception e) {
-            return ResponseEntity.ok(Map.of("success", false, "message", "서버 오류: " + e.getMessage()));
+            return ResponseEntity.ok(Map.of("success", false, "message", ollamaChatService.friendlyErrorMessage("AI DBA 챗봇 호출", e)));
         }
     }
 
