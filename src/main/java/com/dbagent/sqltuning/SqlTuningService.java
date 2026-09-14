@@ -19,7 +19,7 @@ import java.time.Duration;
  *
  * sqltuning.api.url doesn't have to point at localhost - this service only does plain HTTP(JSON), so it
  * works the same whether the FastAPI server runs on this machine, a WSL instance, or a GPU box on the LAN
- * (see OllamaChatService's aidba.ollama.url for the same pattern). It does NOT work if this host has no
+ * (see OllamaChatService's aidba.restapi.url for the same pattern). It does NOT work if this host has no
  * network path to wherever that server actually runs - verify reachability before relying on it.
  */
 @Service

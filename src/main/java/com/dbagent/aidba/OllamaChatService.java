@@ -3,6 +3,7 @@ package com.dbagent.aidba;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,8 +37,13 @@ import java.util.Map;
  * 없는 /api/chat)로 바로 답변을 받고, 못 찾으면 askWithSemanticSearch()로 sqlrestapi의
  * OpenSearch 시맨틱 검색(error_dictionary 인덱스)에 맡긴다 - AiDbaController가 이 둘을 고른다.
  *
- * aidba.ollama.url 프로퍼티 이름은 과거 호환을 위해 그대로 유지했지만, 이제 값은 Ollama가 아니라
- * sqlrestapi의 베이스 URL을 가리켜야 한다(예: http://<GPU서버>:9300).
+ * 사용자 결정(2026-09-14): sqlrestapi를 호출하는 모든 화면(AI 챗봇/AI Current SQL 분석/AI SQL 작성기,
+ * 그리고 SqlTuneAdvisorService의 AI SQL 성능분석까지)이 결국 같은 GPU 서버의 같은 sqlrestapi 인스턴스를
+ * 가리키는데 프로퍼티가 aidba.ollama.url/sqltuneadvisor.api.url 둘로 나뉘어 있던 걸 aidba.restapi.url
+ * 하나로 통합 - 서버 주소가 바뀔 때 한 곳만 고치면 되게 함(과거 aidba.ollama.url 프로퍼티는 제거).
+ * sqltuning.api.url(자체 파인튜닝 sLLM, 완전히 다른 서버/API 규격)은 이번 통합 대상이 아니다.
+ * 값에 스킴(http(s)://)이 없으면 normalizeUrl()이 http://를 자동으로 붙인다 - "GPU서버IP:9300"처럼
+ * 스킴 없이 입력해도 되게 하려는 사용자 요청.
  */
 @Service
 public class OllamaChatService {
@@ -47,8 +53,15 @@ public class OllamaChatService {
     private static final String PROMPT_ID = "chatbot";
     private static final String ERROR_INDEX = "error_dictionary";
 
-    @Value("${aidba.ollama.url}")
+    @Value("${aidba.restapi.url}")
     private String chatApiUrl;
+
+    @PostConstruct
+    private void normalizeUrl() {
+        if (chatApiUrl != null && !chatApiUrl.contains("://")) {
+            chatApiUrl = "http://" + chatApiUrl;
+        }
+    }
 
     // 생성 응답을 기다리는 한도. 하드코딩 300초였으나, 모델 크기와 실행 위치(로컬 vs 원격 GPU 서버)에
     // 따라 적정값이 크게 달라져 설정으로 뺐다 - 재빌드 없이 조정할 수 있어야 한다. 기존 동작을 그대로
