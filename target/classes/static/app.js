@@ -4401,15 +4401,75 @@ let historySortAsc = true;
     // HTML로 바꾼다 - 정식 마크다운 파서가 아니라 이 화면에서 실제로 나오는 패턴에 맞춘 간이 변환.
     function formatAdvisorAnswer(text) {
         if (!text) return '';
-        let html = escapeHtml(text);
-        html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (m, lang, code) =>
-            `<pre style="background: rgba(0,0,0,0.3); color: #e2e8f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; white-space: pre; font-family: 'D2Coding', Consolas, monospace; font-size: 0.85rem; margin: 10px 0; line-height: 1.4;">${code}</pre>`);
-        html = html.replace(/^#{2,4}\s+(.+)$/gm,
-            '<div style="margin: 16px 0 8px; font-weight: 700; color: var(--primary); font-size: 1rem;">$1</div>');
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace;">$1</code>');
-        html = html.replace(/^-\s+(.+)$/gm, '<div style="margin: 3px 0 3px 14px;">• $1</div>');
-        html = html.replace(/\n/g, '<br/>');
+        // 문단(특히 번호 섹션 1,2,3...) 간격이 너무 넓다는 사용자 지적(2026-09-14). 원인: 헤더/구분선(---)/
+        // 글머리를 자체 margin이 있는 <div>로 바꿔도, 그 앞뒤에 낀 마크다운 상의 빈 줄은 그대로 남아
+        // 있다가 마지막 \n->br 치환에서 <br/>가 되어 div margin 위에 또 쌓인다. 특히 "---"로 구분되는
+        // 절 사이엔 "빈 줄 + --- + 빈 줄"이 한꺼번에 끼어 있어 헤더 하나 지날 때마다 <br/>가 여러 번
+        // 겹쳤다. 정규식 치환을 이어 붙이는 대신 줄 단위로 순회하면서, 헤더/구분선/글머리는 서로 인접한
+        // <div>로만 쌓는다(인접 블록 요소의 위아래 margin은 브라우저가 알아서 겹쳐 처리한다) - 그 사이에
+        // 낀 빈 줄은 버리고, 일반 문단과 문단 사이의 빈 줄만 <br/><br/> 한 번으로 살려 문단 구분을 유지한다.
+        const bold = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        const inlineCode = (s) => s.replace(/`([^`]+)`/g, '<code style="background: rgba(0,0,0,0.25); padding: 1px 5px; border-radius: 4px; font-family: Consolas, monospace;">$1</code>');
+        const inline = (s) => inlineCode(bold(s));
+
+        const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+        let html = '';
+        let inCode = false;
+        let codeBuf = [];
+        let lastBlock = true; // 시작 지점도 헤더 취급 - 맨 앞의 빈 줄을 버린다
+        let pendingGap = false;
+
+        const flushCode = () => {
+            html += `<pre style="background: rgba(0,0,0,0.3); color: #e2e8f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; white-space: pre; font-family: 'D2Coding', Consolas, monospace; font-size: 0.85rem; margin: 10px 0; line-height: 1.4;">${codeBuf.join('\n')}</pre>`;
+            codeBuf = [];
+            lastBlock = true;
+            pendingGap = false;
+        };
+
+        for (const raw of lines) {
+            if (inCode) {
+                if (raw.trim() === '```') { inCode = false; flushCode(); }
+                else codeBuf.push(escapeHtml(raw));
+                continue;
+            }
+            if (/^```/.test(raw.trim())) { inCode = true; continue; }
+
+            if (raw.trim() === '') {
+                // 다음 실제 내용이 나올 때까지 판단을 미룬다: 그 내용이 블록(헤더/구분선/글머리)이면
+                // 이 빈 줄은 버려지고, 일반 문단이면 그때 <br/><br/> 한 번으로 되살아난다.
+                pendingGap = true;
+                continue;
+            }
+
+            const heading = /^#{2,4}\s+(.+)$/.exec(raw);
+            if (heading) {
+                html += `<div style="margin: 16px 0 8px; font-weight: 700; color: var(--primary); font-size: 1rem;">${inline(escapeHtml(heading[1]))}</div>`;
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            if (/^-{3,}\s*$/.test(raw.trim())) {
+                html += '<div style="border-top: 1px solid var(--border-color); margin: 14px 0;"></div>';
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            const bullet = /^(\s*)-\s+(.+)$/.exec(raw);
+            if (bullet) {
+                const nested = bullet[1].length >= 2;
+                html += `<div style="margin: 3px 0 3px ${nested ? 28 : 14}px;">• ${inline(escapeHtml(bullet[2]))}</div>`;
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            // 일반 문단 텍스트: 블록(헤더/구분선/글머리) 바로 다음에는 그 블록의 margin으로 충분하므로
+            // <br/>를 넣지 않고, 문단과 문단 사이의 빈 줄만 <br/><br/> 한 번으로 살린다.
+            if (pendingGap && !lastBlock) html += '<br/><br/>';
+            else if (!lastBlock) html += '<br/>';
+            html += inline(escapeHtml(raw));
+            lastBlock = false; pendingGap = false;
+        }
+        if (inCode) flushCode();
         return html;
     }
 
@@ -4875,14 +4935,65 @@ let historySortAsc = true;
     function formatAiMarkdownAnswer(text) {
         if (!text) return '';
         const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        let html = escapeHtml(text);
-        html = html.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (m, lang, code) =>
-            `<pre style="background: rgba(0,0,0,0.3); color: #e2e8f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; white-space: pre; font-family: 'D2Coding', Consolas, monospace; font-size: 0.85rem; margin: 10px 0; line-height: 1.4;">${code}</pre>`);
-        html = html.replace(/^#{2,4}\s+(.+)$/gm,
-            '<div style="margin: 16px 0 8px; font-weight: 700; color: var(--primary); font-size: 1rem;">$1</div>');
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/^-\s+(.+)$/gm, '<div style="margin: 3px 0 3px 14px;">• $1</div>');
-        html = html.replace(/\n/g, '<br/>');
+        // 문단(특히 번호 섹션 1,2,3...) 간격이 너무 넓다는 사용자 지적(2026-09-14) - formatAdvisorAnswer와
+        // 같은 원인(헤더/구분선/글머리 앞뒤 빈 줄이 div margin 위에 <br/>로 겹쳐 쌓임)이라 같은 줄 단위
+        // 렌더링 방식으로 수정 - 자세한 이유는 그쪽 주석 참고.
+        const bold = (s) => s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+        const lines = String(text).replace(/\r\n/g, '\n').split('\n');
+        let html = '';
+        let inCode = false;
+        let codeBuf = [];
+        let lastBlock = true;
+        let pendingGap = false;
+
+        const flushCode = () => {
+            html += `<pre style="background: rgba(0,0,0,0.3); color: #e2e8f0; padding: 12px 14px; border-radius: 6px; overflow-x: auto; white-space: pre; font-family: 'D2Coding', Consolas, monospace; font-size: 0.85rem; margin: 10px 0; line-height: 1.4;">${codeBuf.join('\n')}</pre>`;
+            codeBuf = [];
+            lastBlock = true;
+            pendingGap = false;
+        };
+
+        for (const raw of lines) {
+            if (inCode) {
+                if (raw.trim() === '```') { inCode = false; flushCode(); }
+                else codeBuf.push(escapeHtml(raw));
+                continue;
+            }
+            if (/^```/.test(raw.trim())) { inCode = true; continue; }
+
+            if (raw.trim() === '') {
+                pendingGap = true;
+                continue;
+            }
+
+            const heading = /^#{2,4}\s+(.+)$/.exec(raw);
+            if (heading) {
+                html += `<div style="margin: 16px 0 8px; font-weight: 700; color: var(--primary); font-size: 1rem;">${bold(escapeHtml(heading[1]))}</div>`;
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            if (/^-{3,}\s*$/.test(raw.trim())) {
+                html += '<div style="border-top: 1px solid var(--border-color); margin: 14px 0;"></div>';
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            const bullet = /^(\s*)-\s+(.+)$/.exec(raw);
+            if (bullet) {
+                const nested = bullet[1].length >= 2;
+                html += `<div style="margin: 3px 0 3px ${nested ? 28 : 14}px;">• ${bold(escapeHtml(bullet[2]))}</div>`;
+                lastBlock = true; pendingGap = false;
+                continue;
+            }
+
+            if (pendingGap && !lastBlock) html += '<br/><br/>';
+            else if (!lastBlock) html += '<br/>';
+            html += bold(escapeHtml(raw));
+            lastBlock = false; pendingGap = false;
+        }
+        if (inCode) flushCode();
         return html;
     }
 
