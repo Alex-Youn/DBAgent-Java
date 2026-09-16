@@ -14,6 +14,8 @@ C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\UpdateUserRequest.jav
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\auth\UserController.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\config\StaticResourceConfig.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\DbAgentApplication.java
+C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\InstanceMetricHistoryService.java
+C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\InstanceMetricSamplerService.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\KillSessionRequest.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\MonitorController.java
 C:\AI-Projects\DBAgent-Java\src\main\java\com\dbagent\monitor\MonitorService.java

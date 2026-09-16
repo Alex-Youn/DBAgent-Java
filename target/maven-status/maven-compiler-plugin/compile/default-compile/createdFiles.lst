@@ -1,4 +1,5 @@
 com\dbagent\auth\LoginRequest.class
+com\dbagent\monitor\InstanceMetricHistoryService.class
 com\dbagent\auth\AuthService$AuthSession.class
 com\dbagent\auth\UpdateUserRequest.class
 com\dbagent\oracle\DbConfigAdminController.class
@@ -44,6 +45,7 @@ com\dbagent\query\SqlQueryService.class
 com\dbagent\oracle\DatabaseConfigService.class
 com\dbagent\rdb\EngineMonitorService.class
 com\dbagent\sqlwriter\TableInfoRequest.class
+com\dbagent\monitor\InstanceMetricSamplerService.class
 com\dbagent\sqltuneadvisor\SqlTuneAdvisorRequest.class
 com\dbagent\sqlwriter\SqlWriterGenerateRequest.class
 com\dbagent\oracle\TargetDbConfig.class

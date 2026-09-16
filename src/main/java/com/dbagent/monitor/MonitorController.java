@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,10 +44,12 @@ public class MonitorController {
     private final PostgresMonitorService postgresMonitorService;
     private final MsSqlMonitorService msSqlMonitorService;
     private final CubridMonitorService cubridMonitorService;
+    private final InstanceMetricHistoryService metricHistoryService;
 
     public MonitorController(MonitorService monitorService, DatabaseConfigService configService, AuthService authService,
             MySqlMonitorService mySqlMonitorService, PostgresMonitorService postgresMonitorService,
-            MsSqlMonitorService msSqlMonitorService, CubridMonitorService cubridMonitorService) {
+            MsSqlMonitorService msSqlMonitorService, CubridMonitorService cubridMonitorService,
+            InstanceMetricHistoryService metricHistoryService) {
         this.monitorService = monitorService;
         this.configService = configService;
         this.authService = authService;
@@ -54,6 +57,42 @@ public class MonitorController {
         this.postgresMonitorService = postgresMonitorService;
         this.msSqlMonitorService = msSqlMonitorService;
         this.cubridMonitorService = cubridMonitorService;
+        this.metricHistoryService = metricHistoryService;
+    }
+
+    // 대시보드 CpuDbTimeLineChart/LockTrendChart용 - InstanceMetricSamplerService가 쌓아 둔
+    // instance_metric_history를 그대로 내려준다. 지원 range: "1h"(기본)/"24h"/"7d".
+    @GetMapping("/metric_history")
+    public ResponseEntity<Object> metricHistory(
+            @RequestParam(required = false) String db_id,
+            @RequestParam(required = false) String token,
+            @RequestParam(defaultValue = "1h") String range,
+            @RequestParam(required = false) String metrics) {
+        if (!authService.canAccessDb(token, db_id)) {
+            return dbAccessDenied();
+        }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
+        long toMillis = System.currentTimeMillis();
+        long fromMillis = toMillis - metricHistoryRangeMillis(range);
+        List<String> metricNames = (metrics == null || metrics.isBlank())
+                ? List.of("cpu_pct", "db_time_aas", "tm_lock_waiting", "tx_lock_waiting")
+                : Arrays.stream(metrics.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (String metricName : metricNames) {
+            result.put(metricName, metricHistoryService.query(target.id(), metricName, fromMillis, toMillis));
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    private long metricHistoryRangeMillis(String range) {
+        return switch (range) {
+            case "24h" -> TimeUnit.HOURS.toMillis(24);
+            case "7d" -> TimeUnit.DAYS.toMillis(7);
+            default -> TimeUnit.HOURS.toMillis(1);
+        };
     }
 
     @GetMapping("/tmlock")
@@ -315,6 +354,59 @@ public class MonitorController {
         }
         try {
             return ResponseEntity.ok(monitorService.getTopEvents(target));
+        } catch (SQLException e) {
+            return dbError(e);
+        }
+    }
+
+    // ---- dashboard v2 (oracle-instance-dashboard-spec.md, 2026-09-16) ----
+
+    @GetMapping("/instance_overview")
+    public ResponseEntity<Object> instanceOverview(@RequestParam(required = false) String db_id,
+                                                     @RequestParam(required = false) String token) {
+        if (!authService.canAccessDb(token, db_id)) {
+            return dbAccessDenied();
+        }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
+        try {
+            return ResponseEntity.ok(monitorService.getInstanceOverview(target));
+        } catch (SQLException e) {
+            return dbError(e);
+        }
+    }
+
+    @GetMapping("/top_sql")
+    public ResponseEntity<Object> topSql(@RequestParam(required = false) String db_id,
+                                          @RequestParam(required = false) String token) {
+        if (!authService.canAccessDb(token, db_id)) {
+            return dbAccessDenied();
+        }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
+        try {
+            return ResponseEntity.ok(monitorService.getTopSql(target));
+        } catch (SQLException e) {
+            return dbError(e);
+        }
+    }
+
+    @GetMapping("/active_alerts")
+    public ResponseEntity<Object> activeAlerts(@RequestParam(required = false) String db_id,
+                                                @RequestParam(required = false) String token) {
+        if (!authService.canAccessDb(token, db_id)) {
+            return dbAccessDenied();
+        }
+        TargetDbConfig target = configService.resolve(db_id);
+        if (target == null) {
+            return dbNotFound();
+        }
+        try {
+            return ResponseEntity.ok(monitorService.getActiveAlerts(target));
         } catch (SQLException e) {
             return dbError(e);
         }
