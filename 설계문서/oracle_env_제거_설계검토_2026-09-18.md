@@ -108,16 +108,29 @@ alias를 없앤다는 것은 alias가 담던 정보(주소·포트·SID/서비�
 
 ### RAC 대응
 
-**현재 자료로는 RAC 여부 판단 불가**(8개 전부 `host:""`, repo에 tnsnames.ora 사본 없음) — 폐쇄망의 실제 alias 정의 확인 필요.
+**확정(오케스트레이터 확인, 2026-09-18)**: 폐쇄망 대상은 **RAC DB 4개(각 DB를 인스턴스별로 개별 등록) + 싱글 인스턴스 DB 1개 = 총 8개 접속 항목**. 기존 `databases.json`의 8개 Oracle 엔트리 구조와 정확히 일치 — 지금까지도 사실상 "노드별 개별 등록" 방식으로 운영되어 온 것으로 보인다.
 
-판별 기준(0단계에서 확인): `ADDRESS` 2개 이상/`LOAD_BALANCE`·`FAILOVER` 지정, `SID` 대신 `SERVICE_NAME`, SCAN 이름(`-scan` 접미), `(FAILOVER_MODE=...)`(TAF) 존재.
+판별 기준(참고용, 이미 확정됨): `ADDRESS` 2개 이상/`LOAD_BALANCE`·`FAILOVER` 지정, `SID` 대신 `SERVICE_NAME`, SCAN 이름(`-scan` 접미), `(FAILOVER_MODE=...)`(TAF) 존재.
 
-RAC일 때 선택지:
-1. **노드별 개별 등록**(`ORCL1_n1`, `ORCL1_n2`): 순수 host:port:sid로 가능, 모니터링 관점에선 오히려 더 정확. 관리 항목 2배, 노드 장애 시 해당 항목 down(알림 정책 조정 필요).
+RAC 대응 선택지:
+1. **노드별 개별 등록**(`ORCL1_n1`, `ORCL1_n2`): 순수 host:port:sid로 가능. 관리 항목이 늘고 노드 장애 시 해당 항목이 down으로 보임(알림 정책 조정 필요).
 2. **`descriptor` 모드**: 전체 DESCRIPTION 문자열을 그대로 담아 thin 드라이버에 전달 — tnsnames.ora 없이 다중주소/페일오버 추상화를 그대로 흡수하는 유일한 안. JSON 가독성/오타 위험 상승.
 3. **SCAN + service_name(EZ Connect)**: `//scan-host:1521/ORCLSVC`, DNS가 3개 IP로 물려있으면 성립. 가장 짧지만 DNS 의존이 생겨 "순수 IP" 목표와 일부 상충.
 
-**권고**: `connect_mode`에 `descriptor`를 포함해 열어두되, RAC 아님이 확인되면 안 씀. RAC + 노드별 모니터링이 목적이면 (1)이 더 나음.
+**왜 service_name이 아니라 SID(노드별 개별 등록)가 이 앱에는 더 맞는가 (2026-09-18 추가 논의)**:
+
+일반적으로 RAC 접속의 "정석"은 SERVICE_NAME(옵션 3)이다 - 여러 노드에 걸친 로드밸런싱/페일오버를 추상화해주기 때문에, 트랜잭션을 처리하는 일반 애플리케이션이라면 "어느 노드로 붙었는지" 몰라도 되고 오히려 몰라야 한다(장애 시 자동으로 살아있는 노드로 전환).
+
+**그런데 DBAgent-Java는 그런 종류의 앱이 아니다.** 이 앱이 조회하는 `v$lock`, `v$sysmetric`, `v$osstat`, `v$session` 등은 전부 **인스턴스 로컬 V$ 뷰**다 - RAC에서 V$ 뷰는 접속한 바로 그 인스턴스(노드)의 데이터만 보여주고, 클러스터 전체를 보려면 `GV$`(Global V$, `inst_id` 컬럼으로 노드 구분) 뷰를 따로 써야 한다. 그 결과:
+
+- **service_name으로 접속**하면 → 리스너가 그때그때 임의의 노드로 로드밸런싱 → 지금 보고 있는 게 어느 노드의 데이터인지도 알 수 없고, 나머지 노드의 데이터는 아예 안 보임(단일 노드 스냅샷을 "전체"인 것처럼 오인할 위험).
+- **SID로 노드별 개별 등록**하면 → "노드 1의 CPU/락 상태", "노드 2의 CPU/락 상태"를 **결정적으로, 각각, 전부** 볼 수 있음 → 모니터링 도구 목적에 정확히 부합.
+
+즉 3.5의 "노드별 개별 등록 시 노드 장애가 해당 항목의 down으로 보인다"는 것도 단점이 아니라 **의도된 동작**이다 - 정확히 어느 노드가 죽었는지 그 항목에서 바로 드러나는 것이 모니터링 관점에서는 오히려 장점이다.
+
+(참고: 코드의 모든 조회를 `v$*` → `gv$*`로 바꾸면 service_name 연결 1개로도 `inst_id`별 전체 노드 데이터를 볼 수 있지만, 이는 접속 방식이 아니라 **모든 모니터링 쿼리를 재작성**해야 하는 훨씬 큰 작업이라 이번 전환 범위 밖이다.)
+
+**최종 권고**: 노드별 개별 등록(옵션 1)을 RAC 4개 DB의 기본 방식으로 채택. `connect_mode`에 `descriptor`는 향후 확장용으로 남겨두되(다중 노드를 하나의 db_id로 묶어야 하는 별도 요구가 생길 경우 대비), 지금 전환에서는 사용하지 않는다.
 
 ### 스키마 최종안
 
@@ -150,22 +163,76 @@ switch (mode):
 
 하위호환: `connect_mode` 없고 `host` 비어 있으면 현행 alias 동작 유지(과도기). 5단계에서 이 분기 제거, 그 상태의 Oracle 인스턴스는 기동 시 명시적 오류.
 
-## 마이그레이션 순서
+## 마이그레이션 순서 (상세)
 
-**0단계 — 사전 정보 수집(코드 변경 없음, 가장 중요)**: 전환 전 "alias ↔ 실제 인스턴스" 정답표를 반드시 먼저 만든다.
-1. 폐쇄망에서 8개 alias(`ORCL`,`ORCL2`,`SRCH1`,`SRCH2`,`PORT1`,`PORT2`,`ORCL3`,`ORCL4`) 정의 전문을 확보, alias별 HOST/PORT/SID·SERVICE_NAME/ADDRESS 개수/FAILOVER 여부 표로 정리
-2. 현행(alias) 상태에서 각 인스턴스에 `select instance_name, host_name, version from v$instance; select name from v$database;` 결과 수집 → 전환 전후 비교 기준표
-3. 결과로 RAC 여부와 SID/SERVICE_NAME 구분 확정
+체크리스트 형태는 별도 문서 `설계문서/oracle_env_제거_체크리스트.md` 참고. 여기서는 각 단계를 "누가 무엇을 준비/실행하는지" 기준으로 상세 기술한다.
 
-**1단계 — 코드 변경(동작 무변화, 안전)**: `buildDsn()`에 `connect_mode` 분기 추가(미지정 시 현행 100% 유지), 풀 생성 시 실제 DSN INFO 로그, 기동 시 id/`(host,port,sid)` 중복 WARN 로그, `TnsAdminInitializer`의 `deriveFromOracleHome()` 제거(외부 properties가 이미 tns-admin 명시 중이라 실동작 변화 없음 — **폐쇄망 배포본 확인 선행 필요**). 여기까지는 언제든 롤백 가능.
+### 0단계 — 사전 정보 수집 (코드 변경 없음, 착수 전 필수)
 
-**2단계 — 데이터 전환(인스턴스 단위, 점진)**: TEST 그룹부터 1개씩 host/port/connect_mode/sid 채움 → `GET /api/pool/test?db_id=...`로 접속 확인 → v$instance로 0단계 기준표와 대조. 매 전환마다 `databases.json.bak-YYYYMMDD` 백업. 순서: TEST → 검색DB → 포탈 → 통합DB(가장 중요한 것 마지막). 롤백: host 다시 비우면 즉시 alias 모드 복귀.
+이 단계 없이는 1단계도 시작할 수 없다. **오케스트레이터가 폐쇄망에서 직접 확보해야 하는 준비물 5가지**:
 
-**3단계 — tnsnames.ora 의존 제거**: 8개 전부 검증 완료 후 `dbagent.oracle.tns-admin` 값 비움(프로퍼티는 유지), 며칠 운영 확인. alias 폴백 코드는 아직 유지(롤백용).
+**A. `tnsnames.ora` 정의 전문** — 폐쇄망 서버의 `%ORACLE_HOME%\network\admin\tnsnames.ora`(또는 `dbagent.oracle.tns-admin`이 가리키는 경로)에서 현재 8개 alias(`ORCL`,`ORCL2`,`SRCH1`,`SRCH2`,`PORT1`,`PORT2`,`ORCL3`,`ORCL4`) 항목 전체를 확보하고, alias별로 HOST/PORT/SID 또는 SERVICE_NAME/ADDRESS 개수(1개=단일노드, 2개 이상=RAC 의심)를 표로 정리. `LOAD_BALANCE`/`FAILOVER`/`(FAILOVER_MODE=...)` 문구 유무도 같이 확인(RAC/TAF 판단 근거).
 
-**4단계 — oracle.env 제거**: `resolve("")` → null, `listAccounts()` blank 분기 정리, `app.js` 빈 db_id 요청 가드 추가, `oracle.env` 파일 삭제(루트+dist+폐쇄망), `dbagent.oracle-env-path` 프로퍼티+`@Value` 필드 동시 제거(미제거 시 기동 실패). 문서 갱신 대상: `가이드/IMPLEMENTATION.md`, `dist/application.properties.sample`.
+**B. 현재(alias) 상태의 실접속 기준표** — 8개 인스턴스 각각에서 아래 쿼리 결과 수집:
+```sql
+SELECT instance_name, host_name, version FROM v$instance;
+SELECT name FROM v$database;
+```
+전환 후 "같은 DB에 붙는지" 판정할 유일한 정답표 — 이것 없이 전환하면 오접속 사고가 재발해도 못 잡는다.
 
-**5단계 — alias 경로 완전 삭제**: `buildDsn()`의 `"tns"` 레거시 분기 제거, `TnsAdminInitializer` 클래스 삭제, `dbagent.oracle.tns-admin` 프로퍼티 삭제, host 빈 Oracle 인스턴스는 기동 시 명시적 오류. `db-mgmt.html` 라벨 "Host (필수)"로 수정 + `connect_mode` 드롭다운 추가. `expected_instance_name` 검증(위 대책 4번)도 이 시점 도입.
+**C. 폐쇄망 배포본 외부 `application.properties` 확인** — `dbagent.oracle.tns-admin=...` 줄이 있는지만 확인. 없으면 1단계 착수 전 그 값부터 채워야 함(안 그러면 아직 `oracle.env`의 ORACLE_HOME 유도에 의존 중).
+
+**D. 루트 `databases.json`의 `ORCL5` 중복 의도 확인** — "포탈 #1"/"포탈 #2"가 개발용에서 같은 sid를 쓰는 게 의도인지 방치된 실수인지 확인(실서비스 dist는 이미 `PORT1`/`PORT2`로 분리돼 있어 문제 없음).
+
+**E. 기본 DB fallback 제거 여부 결정** — 로그인 직후 `db_id`가 빈 상태에서 화면에 의미 있는 게 그려지는지 확인. 없으면 fallback 완전 제거(권고안) 그대로, 있으면 `"default": true` 플래그 방식으로 조정.
+
+A~E가 모두 준비되면 1단계 착수.
+
+### 1단계 — 코드 변경 (동작 무변화, 안전)
+
+준비물 A~E 확보 후 진행. 이 단계까지는 **실제 DB 연결 방식이 하나도 안 바뀐다** — 언제든 안전하게 롤백 가능한 지점.
+
+- `buildDsn()`에 `connect_mode`(sid/service/descriptor) 분기 추가 — 미지정 시 현행 100% 동일 동작
+- 풀 생성 시 실제 DSN을 INFO 로그로 1회 남기도록 추가(`oracle-<id> -> host:port:sid`)
+- `DatabaseConfigService.init()`에 id 중복(경고)/`(host,port,sid)` 중복(경고) 검증 로그 추가
+- `TnsAdminInitializer.deriveFromOracleHome()` 제거 — 준비물 C가 "명시돼 있음"으로 확인된 경우에만 진행(안 그러면 tns-admin 값부터 채우는 작업이 선행)
+- 컴파일 + 로컬 도커 환경에서 기존 동작(alias 접속) 그대로 되는지 회귀 확인
+- main/AIX 양쪽 동일 반영, 빌드/배포
+
+### 2단계 — 데이터 전환 (인스턴스 단위, 점진)
+
+인스턴스 1개씩, 중요도 낮은 것부터: **TEST 그룹 → 검색DB(SRCH1/2) → 포탈(PORT1/2) → 통합DB(가장 중요, 맨 마지막)**.
+
+각 인스턴스마다:
+1. `databases.json.bak-YYYYMMDD` 백업(기존 관례)
+2. 해당 항목에 `host`/`port`/`sid`(준비물 A 표 기준 실제 값) 채우기
+3. `GET /api/pool/test?db_id=...` 호출해 접속 성공 확인
+4. 접속 성공 시 `v$instance`/`v$database` 결과를 준비물 B 기준표와 대조 — **다르면 즉시 중단하고 host 재확인**(조용히 다른 DB에 붙는 게 가장 위험한 케이스)
+5. 문제없으면 다음 인스턴스로
+
+롤백: 문제 생기면 해당 인스턴스의 `host`만 다시 비우면 즉시 alias 모드로 복귀(1단계에서 alias 경로를 남겨뒀기 때문).
+
+**주의**: 로컬 도커는 alias 8개가 전부 같은 XE로 매핑돼 있어 이 단계의 실습/리허설만 가능하고 실검증은 불가능하다. 실제 검증은 반드시 폐쇄망에서.
+
+### 3단계 — tnsnames.ora 의존 제거
+
+8개 전부 2단계 통과 확인 후 `dbagent.oracle.tns-admin` 값을 비움(프로퍼티 자체는 유지 — 롤백용). 며칠 정상 운영 확인(alias 폴백 코드는 아직 유지).
+
+### 4단계 — `oracle.env` 제거
+
+- `resolve("")` → null 반환으로 변경, `listAccounts()`의 blank 분기 정리(실질 3곳)
+- `app.js`의 `window.currentDbId || ""` 요청 지점에 "빈 값이면 요청 안 보냄" 가드 추가
+- `oracle.env` 파일 삭제 — **루트 + dist + 폐쇄망 배포본, 3곳 다 수동 삭제 필요**(skip-worktree라 git으로 안 전파됨, 오케스트레이터가 직접 삭제)
+- `dbagent.oracle-env-path` 프로퍼티 + 관련 `@Value` 필드 동시 제거(미제거 시 기동 실패)
+- `가이드/IMPLEMENTATION.md`, `dist/application.properties.sample` 문서 갱신
+
+### 5단계 — alias 경로 완전 삭제 (최종 정리)
+
+- `buildDsn()`의 `"tns"` 레거시 분기 제거
+- `TnsAdminInitializer` 클래스 삭제, `dbagent.oracle.tns-admin` 프로퍼티 삭제
+- `host` 빈 Oracle 인스턴스는 기동 시 명시적 오류로 처리
+- `db-mgmt.html` 라벨을 "Host (필수)"로 수정 + `connect_mode` 드롭다운 추가
+- `expected_instance_name` + `v$instance` 실접속 검증 로직 도입(사고 재발 방지 최종 장치)
 
 **배포·운영 주의**: `application.properties`/`oracle.env`/`databases.json`은 git skip-worktree 대상이라 서버에서 직접 수정해야 하고 파일 "삭제"는 git으로 전파되지 않음 — 배포 절차서에 수동 삭제 단계 명시 필요. 회사 PC는 pull 전 백업 원칙 있으니 4단계 배포 시 특히 주의. 모든 단계는 [[dual-project-sync]] 원칙대로 DBAgent-Java/DBAgent-Java-AIX 두 프로젝트 동일 반영 필요.
 
@@ -183,14 +250,14 @@ switch (mode):
 | SID와 SERVICE_NAME 혼동 지정 | 낮음 | ORA-12505/12514로 즉시 실패(조용한 오접속 아님). 0단계 정답표로 사전 차단 |
 | SID는 맞는데 실제로는 다른 노드/서버 | **높음** | 조용히 성공하므로 가장 위험. `expected_instance_name` + v$instance 대조가 유일한 근본 대책 |
 | 리스너의 valid_node_checking 등 보안 정책이 직접 접속 차단 | 중간 | 폐쇄망에서 인스턴스 1개로 먼저 검증 |
-| RAC인데 단일 노드 직결로 전환 | 중간 | 0단계에서 RAC 여부 확정 후 3.5의 (1) 또는 (2) 채택 |
+| RAC인데 단일 노드 직결로 전환 | ~~중간~~ 해소 | RAC 4개+싱글 1개=8개 구조 확정(2026-09-18), 노드별 개별 등록(옵션 1)으로 채택 — V$ 뷰 특성상 오히려 이 방식이 모니터링 목적에 더 맞음(RAC 대응 절 참고) |
 | fallback 제거로 로그인 직후 404성 응답 증가 | 낮음 | app.js 빈 db_id 가드 |
 | 로컬 도커에서는 전환 검증 불가 | 중간 | alias 8개가 전부 XE 하나로 매핑되어 로컬은 "코드 회귀 없음"만 검증, 실매핑은 폐쇄망에서만 |
 | `dbagent.oracle-env-path` 필드/프로퍼티 비동기 제거로 기동 실패 | 낮음 | 기본값 없는 @Value임을 인지하고 동시 제거 |
 
 ## 확인이 필요한 미결 사항
 
-1. **폐쇄망 `tnsnames.ora`의 8개 alias 정의 전문** — RAC 여부/SID·SERVICE_NAME 구분의 유일한 근거. 이것 없이는 1단계 이상 진행 불가.
+1. **폐쇄망 `tnsnames.ora`의 8개 alias 정의 전문(HOST/PORT/SID)** — RAC 여부는 확정됨(RAC 4개+싱글 1개), 남은 건 각 인스턴스의 실제 접속값. 오케스트레이터가 확보 예정(2026-09-18). 이것 없이는 1단계 이상 진행 불가.
 2. **루트 `databases.json`의 `ORCL5` 중복(포탈 #1/#2)이 의도된 것인지** — `dist`(실서비스)는 `PORT1`/`PORT2`로 분리돼 있어 개발본만 도커 alias 재사용으로 중복된 상태로 보임.
 3. **기본 DB fallback을 제거(옵션 B)해도 되는지** — 빈 db_id 상태에서 실제로 의미 있는 화면이 그려지고 있는지 확인 필요.
 4. **폐쇄망 배포본 외부 application.properties에 `dbagent.oracle.tns-admin`이 명시되어 있는지** — 비어 있으면 현재 폐쇄망은 여전히 ORACLE_HOME 유도 경로로 동작 중이라 1단계에서 명시값 선행 필요.
