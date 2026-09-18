@@ -28,6 +28,9 @@ build/
 #       - 그래서 *.db 같은 넓은 패턴 대신 경로를 하나씩 좁게 지정한다.
 /users.db
 /dist/users.db
+# instance_metric_history 전용 DB(2026-09-18 분리) - users.db와 같은 이유로 환경마다 달라야 함
+/metrics.db
+/dist/metrics.db
 /dbagent-java.out.log
 /dbagent-java.err.log
 /dist/dbagent-java.out.log

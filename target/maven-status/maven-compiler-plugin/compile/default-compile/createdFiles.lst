@@ -36,6 +36,7 @@ com\dbagent\rdb\MySqlMonitorService.class
 com\dbagent\aidba\ChatRequest.class
 com\dbagent\rdb\PostgresMonitorService.class
 com\dbagent\sqltuning\SqlTuningAutoRequest.class
+com\dbagent\config\DataSourceConfig.class
 com\dbagent\monitor\KillSessionRequest$SessionRef.class
 com\dbagent\rdb\CubridMonitorService.class
 com\dbagent\aidba\AiDbaController.class
