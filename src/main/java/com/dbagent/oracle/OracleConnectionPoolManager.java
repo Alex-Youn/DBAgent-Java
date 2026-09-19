@@ -2,6 +2,8 @@ package com.dbagent.oracle;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -9,6 +11,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -21,6 +24,8 @@ import java.util.regex.Pattern;
  */
 @Service
 public class OracleConnectionPoolManager {
+
+    private static final Logger log = LoggerFactory.getLogger(OracleConnectionPoolManager.class);
 
     private static final Duration COOLDOWN = Duration.ofSeconds(10);
 
@@ -142,6 +147,24 @@ public class OracleConnectionPoolManager {
     }
 
     private String buildDsn(TargetDbConfig target) {
+        String mode = target.connectMode();
+        if (mode != null && !mode.isBlank()) {
+            return switch (mode.toLowerCase(Locale.ROOT)) {
+                // Explicit SID descriptor: host:port:SID.
+                case "sid" -> target.host() + ":" + target.port() + ":" + target.sid();
+                // Service-name descriptor: needs the "//" form, unlike the plain SID syntax above.
+                case "service" -> "//" + target.host() + ":" + target.port() + "/" + target.sid();
+                // Caller supplies a full connect descriptor/TNS string in "sid" verbatim; host/port unused.
+                case "descriptor" -> target.sid();
+                default -> legacyDsn(target);
+            };
+        }
+        return legacyDsn(target);
+    }
+
+    // oracle.env 제거 마이그레이션 이전부터의 기존 동작: connect_mode가 없는 인스턴스는 그대로 이
+    // 규칙을 따른다 (host 있으면 host:port:sid, 없으면 sid를 TNS alias로 취급).
+    private String legacyDsn(TargetDbConfig target) {
         String host = target.host();
         if (host != null && !host.isBlank()) {
             return host + ":" + target.port() + ":" + target.sid();
@@ -151,6 +174,7 @@ public class OracleConnectionPoolManager {
     }
 
     private HikariDataSource createPool(TargetDbConfig target, String dsn, boolean sysdba) {
+        log.info("oracle-{} -> {}", target.id(), dsn);
         HikariConfig cfg = new HikariConfig();
         cfg.setJdbcUrl("jdbc:oracle:thin:@" + dsn);
         cfg.setUsername(target.user());

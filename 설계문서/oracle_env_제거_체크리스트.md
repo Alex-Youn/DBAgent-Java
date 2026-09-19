@@ -4,20 +4,20 @@
 
 ## 0단계 — 사전 정보 수집 (오케스트레이터, 폐쇄망에서 직접 확보)
 
-- [ ] **A. tnsnames.ora 정의 전문** — 8개 alias(`ORCL`,`ORCL2`,`SRCH1`,`SRCH2`,`PORT1`,`PORT2`,`ORCL3`,`ORCL4`) 항목 전체 확보
+- [x] **A. tnsnames.ora 정의 전문** — 8개 alias(`ORCL`,`ORCL2`,`SRCH1`,`SRCH2`,`PORT1`,`PORT2`,`ORCL3`,`ORCL4`) 항목 전체 확보
 
   | alias | HOST | PORT | SID/SERVICE_NAME | ADDRESS 개수 | LOAD_BALANCE/FAILOVER 여부 |
   |---|---|---|---|---|---|
-  | ORCL | | | | | |
-  | ORCL2 | | | | | |
-  | SRCH1 | | | | | |
-  | SRCH2 | | | | | |
-  | PORT1 | | | | | |
-  | PORT2 | | | | | |
-  | ORCL3 | | | | | |
-  | ORCL4 | | | | | |
+  | ORAKIPO1|10.133.103.217 |1520 |ORAKIPO1/ORAKIPO|2| RAC(Real Aoolicatiin Cluster) |
+  | ORAKIPO2|10.133.103.219 |1520 |ORAKIPO2/ORAKIPO|2| RAC(Real Aoolicatiin Cluster) |
+  | ORANPSH1|10.133.103.221 |1521 |ORANPSH1/ORANPSH|2| RAC(Real Aoolicatiin Cluster) |
+  | ORANPSH2|10.133.103.223 |1521 |ORANPSH2/ORANPSH|2| RAC(Real Aoolicatiin Cluster) |
+  | ORANPS1 |10.133.106.166 |1521 |ORANPS1/ORANPS|2| RAC(Real Aoolicatiin Cluster) |
+  | ORANPS2 |10.133.106.167 |1521 |ORANPS2/ORANPS|2| RAC(Real Aoolicatiin Cluster) |
+  | ORAKMS1 |10.133.101.111 |1521 |ORAKMS1/ORAKMS|2| RAC(Real Aoolicatiin Cluster) |
+  | ORAKMS2 |10.133.101.113 |1521 |ORAKMS2/ORAKMS|2| RAC(Real Aoolicatiin Cluster) |
 
-- [ ] **B. 실접속 기준표** — 8개 인스턴스 각각에서 실행 결과 수집
+- [x] **B. 실접속 기준표** — 8개 인스턴스 각각에서 실행 결과 수집
 
   ```sql
   SELECT instance_name, host_name, version FROM v$instance;
@@ -26,18 +26,18 @@
 
   | alias(=db_id) | instance_name | host_name | version | database name |
   |---|---|---|---|---|
-  | ORCL | | | | |
-  | ORCL2 | | | | |
-  | SRCH1 | | | | |
-  | SRCH2 | | | | |
-  | PORT1 | | | | |
-  | PORT2 | | | | |
-  | ORCL3 | | | | |
-  | ORCL4 | | | | |
+  | ORAKIPO1 |ORAKIPO1| 10.133.103.217 |11.2.4| ORAKIPO |
+  | ORAKIPO2 |ORAKIPO2| 10.133.103.219 |11.2.4| ORAKIPO |
+  | ORANPSH1 |ORANPSH1| 10.133.103.221 |12.2.0| ORANPSH |
+  | ORANPSH2 |ORANPSH2| 10.133.103.223 |12.2.0| ORANPSH |
+  | ORANPS1 |ORANPS1 | 10.133.106.166| 12.2.0 | ORANPS|
+  | ORANPS2 |ORANPS2 | 10.133.106.166| 12.2.0 | ORANPS|
+  | ORACFE1 |ORACFE1 | 10.133.106.193| 19c | ORACFE |
+  | ORACFE2 |ORACFE2 | 10.133.106.194| 19c | ORACFE |
 
-- [ ] **C. 폐쇄망 dist `application.properties`에 `dbagent.oracle.tns-admin=` 값이 명시돼 있는지 확인** — 있음 / 없음(있으면 값: ________________)
-- [ ] **D. 루트 `databases.json`의 `ORCL5` 중복("포탈 #1/#2") 의도 확인** — 의도된 것 / 실수(정리 필요)
-- [ ] **E. 기본 DB fallback(빈 db_id) 제거 여부 결정** — 완전 제거(권고) / `"default": true` 플래그로 유지
+- [x] **C. 폐쇄망 dist `application.properties`에 `dbagent.oracle.tns-admin=` 값이 명시돼 있는지 확인** — 있음 / 없음(있으면 값: C:/oracle_docker_data)
+- [x] **D. 루트 `databases.json`의 `ORCL5` 중복("포탈 #1/#2") 의도 확인** — 의도된 것 / 실수(정리 필요) => 인터넷망 테스트 환경이기 때문에 삭제해도 무방
+- [x] **E. 기본 DB fallback(빈 db_id) 제거 여부 결정** — 완전 제거(권고) / `"default": true` 플래그로 유지 => 완전 제거
 
 > A~E 전부 체크되기 전에는 1단계를 시작하지 않는다.
 
@@ -45,35 +45,35 @@
 
 ## 1단계 — 코드 변경 (동작 무변화)
 
-- [ ] `OracleConnectionPoolManager.buildDsn()`에 `connect_mode`(sid/service/descriptor) 분기 추가 — 미지정 시 현행 동작 유지
-- [ ] 풀 생성 시 실제 DSN INFO 로그 추가 (`oracle-<id> -> host:port:sid`)
-- [ ] `DatabaseConfigService.init()`에 id 중복 / `(host,port,sid)` 중복 WARN 로그 추가
-- [ ] `TnsAdminInitializer.deriveFromOracleHome()` 제거 (0단계 C 확인 후에만)
-- [ ] `PoolTestController`(`/api/pool/test`)에 `authService.canAccessDb()` 인증 체크 추가 (부수 발견 보안 이슈, 이 단계에서 같이 처리 권장)
-- [ ] 로컬 도커에서 기존 동작(alias 접속) 회귀 없음 확인
-- [ ] main 컴파일/빌드/배포
-- [ ] AIX 동일 포팅 + 컴파일/빌드/배포
-- [ ] git 커밋 + push (main/AIX 각각)
+- [x] `OracleConnectionPoolManager.buildDsn()`에 `connect_mode`(sid/service/descriptor) 분기 추가 — 미지정 시 현행 동작 유지
+- [x] 풀 생성 시 실제 DSN INFO 로그 추가 (`oracle-<id> -> host:port:sid`)
+- [x] `DatabaseConfigService.init()`에 id 중복 / `(host,port,sid)` 중복 WARN 로그 추가
+- [x] `TnsAdminInitializer.deriveFromOracleHome()` 제거 (0단계 C 확인 후에만)
+- [x] `PoolTestController`(`/api/pool/test`)에 `authService.canAccessDb()` 인증 체크 추가 (부수 발견 보안 이슈, 이 단계에서 같이 처리 권장)
+- [x] 로컬 도커에서 기존 동작(alias 접속) 회귀 없음 확인
+- [x] main 컴파일/빌드/배포
+- [x] AIX 동일 포팅 + 컴파일/빌드/배포
+- [x] git 커밋 + push (main/AIX 각각)
 
 ## 2단계 — 데이터 전환 (인스턴스 단위, 점진 — 폐쇄망에서만 실검증 가능)
 
 순서: TEST → 검색DB → 포탈 → 통합DB(마지막)
 
-- [ ] TEST01
-- [ ] TEST02
-- [ ] SRCH1
-- [ ] SRCH2
-- [ ] PORT1
-- [ ] PORT2
-- [ ] ORCL3
-- [ ] ORCL4(또는 통합DB 실제 id)
+- [x] ORAKIPO1
+- [x] ORAKIPO2
+- [x] ORANPSH1
+- [x] ORANPSH2
+- [x] ORANPS1
+- [x] ORANPS2
+- [x] ORACFE1
+- [x] ORACFE2
 
 각 항목 공통 절차:
-1. [ ] `databases.json.bak-YYYYMMDD` 백업
-2. [ ] `host`/`port`/`sid` 채움 (0단계 A 표 기준)
-3. [ ] `GET /api/pool/test?db_id=...` 접속 성공 확인
-4. [ ] `v$instance`/`v$database` 결과를 0단계 B 기준표와 대조 — 불일치 시 즉시 중단, host 재확인
-5. [ ] 문제없으면 다음 인스턴스로
+1. [x] `databases.json.bak-YYYYMMDD` 백업
+2. [x] `host`/`port`/`sid` 채움 (0단계 A 표 기준)
+3. [x] `GET /api/pool/test?db_id=...` 접속 성공 확인
+4. [x] `v$instance`/`v$database` 결과를 0단계 B 기준표와 대조 — 불일치 시 즉시 중단, host 재확인
+5. [x] 문제없으면 다음 인스턴스로
 
 ## 3단계 — tnsnames.ora 의존 제거
 
