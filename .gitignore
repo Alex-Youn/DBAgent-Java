@@ -26,11 +26,14 @@ build/
 # users.db 는 로그인 계정/세션 데이터라 환경마다 달라야 하는 파일이기도 하다.
 # 주의: data/oracle_errors.db(에러사전 9,372건)는 정상 데이터이므로 절대 여기 걸리면 안 된다
 #       - 그래서 *.db 같은 넓은 패턴 대신 경로를 하나씩 좁게 지정한다.
-/users.db
-/dist/users.db
-# instance_metric_history 전용 DB(2026-09-18 분리) - users.db와 같은 이유로 환경마다 달라야 함
-/metrics.db
-/dist/metrics.db
+# 2026-09-21부터 users.db/metrics.db/dbconfig.db(+WAL/SHM 사이드카)는 db_config/ 하위로 이동.
+/db_config/
+/dist/db_config/
+
+# 대상 DB 비밀번호 암호화용 마스터 키(6단계, 2026-09-21). 이게 유출되면 암호화가 무의미해지므로
+# 절대 커밋 금지 - 환경마다 자기 키를 자동 생성해서 쓴다(git으로 전파할 대상이 아님).
+dbagent.key
+*.key
 /dbagent-java.out.log
 /dbagent-java.err.log
 /dist/dbagent-java.out.log

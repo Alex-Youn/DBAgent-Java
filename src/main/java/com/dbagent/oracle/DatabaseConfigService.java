@@ -1,5 +1,6 @@
 package com.dbagent.oracle;
 
+import com.dbagent.security.CredentialCipher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -13,9 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +37,7 @@ public class DatabaseConfigService {
     private static final String LEGACY_JSON_PATH = "databases.json";
 
     private final JdbcTemplate jdbc;
+    private final CredentialCipher cipher;
     private final ObjectMapper mapper = new ObjectMapper();
 
     // Serializes createInstance/updateInstance/deleteInstance against each other and against the
@@ -45,8 +45,9 @@ public class DatabaseConfigService {
     // this - SQLite/JDBC already gives each query a consistent snapshot.
     private final Object writeLock = new Object();
 
-    public DatabaseConfigService(@Qualifier("dbConfigJdbcTemplate") JdbcTemplate jdbc) {
+    public DatabaseConfigService(@Qualifier("dbConfigJdbcTemplate") JdbcTemplate jdbc, CredentialCipher cipher) {
         this.jdbc = jdbc;
+        this.cipher = cipher;
     }
 
     @PostConstruct
@@ -84,6 +85,19 @@ public class DatabaseConfigService {
                 "id INTEGER PRIMARY KEY CHECK (id = 1)," +
                 "migrated_from_json INTEGER NOT NULL DEFAULT 0" +
                 ")");
+        // 6단계(비밀번호 실암호화) 기록용 컬럼 - 재암호화 여부 판단에는 쓰지 않는다(아래
+        // reencryptAllPasswords() 주석 참고). 기존 dbconfig.db에도 무중단으로 붙인다.
+        List<String> metaColumns = jdbc.query("PRAGMA table_info(db_config_meta)",
+                (rs, rowNum) -> rs.getString("name"));
+        if (metaColumns.stream().noneMatch("password_key_id"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE db_config_meta ADD COLUMN password_key_id TEXT");
+        }
+        if (metaColumns.stream().noneMatch("password_format_ver"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE db_config_meta ADD COLUMN password_format_ver INTEGER DEFAULT 0");
+        }
+        if (metaColumns.stream().noneMatch("reencrypted_at"::equalsIgnoreCase)) {
+            jdbc.execute("ALTER TABLE db_config_meta ADD COLUMN reencrypted_at TEXT");
+        }
         jdbc.update("INSERT OR IGNORE INTO db_config_meta (id, migrated_from_json) VALUES (1, 0)");
         Integer migrated = jdbc.queryForObject(
                 "SELECT migrated_from_json FROM db_config_meta WHERE id = 1", Integer.class);
@@ -91,8 +105,132 @@ public class DatabaseConfigService {
             migrateFromJsonFile();
             jdbc.update("UPDATE db_config_meta SET migrated_from_json = 1 WHERE id = 1");
         }
+        reencryptAllPasswords();
         warnOnDuplicates();
         errorOnMissingOracleHost();
+    }
+
+    /**
+     * 평문/B64/구키로 저장된 비밀번호를 현재 활성 키의 AES 암호문으로 올린다
+     * (oracle.env 제거 마이그레이션 6단계, 2026-09-21).
+     *
+     * <p><b>1회성 플래그가 아니라 매 기동 멱등 스캔이다.</b> 대상이 10여 행뿐이라 전수 스캔 비용이
+     * 사실상 0인 반면, 플래그 방식은 자기치유가 안 된다 - 롤백으로 구 jar가 한 행을 B64로 덮어썼거나,
+     * 키 로테이션으로 활성 키가 바뀌었거나, 일부 행에서 실패했을 때 플래그가 이미 1이면 영원히 다시
+     * 돌지 않는다. 같은 이유로 키 로테이션 후 재암호화도 이 메서드 하나가 같이 처리한다.
+     *
+     * <p>실패한 행은 원본을 그대로 두고 ERROR 로그만 남긴 뒤 계속 진행한다 - 한 인스턴스 때문에
+     * 전체 기동을 막지 않는다는 기존 원칙(warnOnDuplicates/errorOnMissingOracleHost)을 따른다.
+     * 단 키 파일 자체를 못 읽는 경우는 MasterKeyProvider가 기동 시점에 이미 fail-fast 시킨다.
+     */
+    private void reencryptAllPasswords() {
+        synchronized (writeLock) {
+            List<Map<String, Object>> rows = jdbc.queryForList("SELECT id, password, accounts FROM db_instances");
+            int changed = 0;
+            int failed = 0;
+            for (Map<String, Object> row : rows) {
+                String id = (String) row.get("id");
+                try {
+                    String password = (String) row.get("password");
+                    String accounts = (String) row.get("accounts");
+                    String newPassword = cipher.needsReencrypt(password)
+                            ? cipher.encrypt(cipher.decrypt(password)) : password;
+                    String newAccounts = reencryptAccountsJson(accounts);
+                    boolean passwordChanged = newPassword != null && !newPassword.equals(password);
+                    boolean accountsChanged = newAccounts != null && !newAccounts.equals(accounts);
+                    if (!passwordChanged && !accountsChanged) {
+                        continue;
+                    }
+                    // 행 단위로 커밋해서, 중간에 한 행이 실패해도 앞서 성공한 행은 그대로 남게 한다.
+                    jdbc.update("UPDATE db_instances SET password = ?, accounts = ? WHERE id = ?",
+                            passwordChanged ? newPassword : password,
+                            accountsChanged ? newAccounts : accounts,
+                            id);
+                    changed++;
+                } catch (RuntimeException e) {
+                    failed++;
+                    // 암호문/평문/키는 절대 로그에 싣지 않는다 - 인스턴스 ID만.
+                    log.error("인스턴스 '{}'의 비밀번호를 현재 키로 처리할 수 없습니다 - 관리 화면에서 "
+                            + "비밀번호를 다시 입력해야 합니다. ({})", id, e.getMessage());
+                }
+            }
+            jdbc.update("UPDATE db_config_meta SET password_key_id = ?, password_format_ver = 1, "
+                            + "reencrypted_at = ? WHERE id = 1",
+                    cipher.activeKeyId(), java.time.LocalDateTime.now().toString());
+            if (changed > 0 || failed > 0) {
+                log.info("비밀번호 재암호화: 변경 {}건, 실패 {}건 (활성 키 {})", changed, failed, cipher.activeKeyId());
+            }
+            if (changed > 0) {
+                purgeOldPageImages();
+            }
+        }
+    }
+
+    /**
+     * 재암호화로 덮어쓴 예전 값(평문/B64)의 잔재를 파일에서 지운다.
+     *
+     * <p>UPDATE만으로는 부족하다 - SQLite는 WAL에 옛 페이지 이미지를 남기고 본 파일에도 free page로
+     * 남겨두므로, 암호화를 마친 뒤에도 {@code dbconfig.db-wal}을 그대로 열어보면 예전 {@code B64(...)}
+     * 값이 그대로 읽힌다(2026-09-21 실측: 재암호화 직후 WAL에서 B64 마커 다수 발견). B64는 키 없이
+     * 디코딩되므로, 이걸 안 지우면 "파일이 통째로 유출돼도 비밀번호는 안전하다"는 암호화의 목적
+     * 자체가 무너진다.
+     *
+     * <p>재암호화가 실제로 행을 바꾼 기동(최초 업그레이드, 키 로테이션 직후)에만 돌고, 그 외에는
+     * 호출되지 않는다. dbconfig.db는 인스턴스 수십 행짜리 작은 파일이라 비용은 무시할 수준이다.
+     */
+    private void purgeOldPageImages() {
+        try {
+            jdbc.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+            jdbc.execute("VACUUM");
+            log.info("재암호화 전 값이 남아있던 페이지를 정리했습니다(WAL 체크포인트 + VACUUM).");
+        } catch (RuntimeException e) {
+            // 정리에 실패해도 암호화 자체는 이미 끝났으므로 기동을 막지 않는다 - 다만 예전 값이
+            // 파일에 남아있을 수 있다는 사실은 눈에 띄게 알린다.
+            log.warn("재암호화 후 파일 정리(WAL 체크포인트/VACUUM)에 실패했습니다 - dbconfig.db와 "
+                    + "그 WAL 파일에 예전 비밀번호 값이 남아있을 수 있으니, 이 파일들을 외부로 "
+                    + "복사/백업할 때 주의하십시오. ({})", e.getMessage());
+        }
+    }
+
+    /**
+     * accounts JSON 배열 안의 각 password도 같은 규칙으로 올린다 - 비밀번호가 컬럼 하나가 아니라
+     * 이 JSON 안에도 들어 있어서, 여기를 빠뜨리면 추가 계정만 평문으로 남는다.
+     * 바뀐 게 없으면 원본을 그대로 반환해 불필요한 UPDATE를 피한다.
+     *
+     * <p>계정 하나가 실패하면 예외가 호출자로 올라가 그 인스턴스 행 전체가 건너뛰어진다
+     * (reencryptAllPasswords()의 행 단위 try/catch가 받아서 원본 보존 + ERROR 로그). 계정 단위로
+     * 더 잘게 살릴 수도 있지만, 행 단위로도 데이터는 보존되고 로그로 어느 인스턴스인지 드러나며
+     * 다음 기동에 자동 재시도되므로 단순한 쪽을 택했다.
+     */
+    private String reencryptAccountsJson(String accountsJson) {
+        if (accountsJson == null || accountsJson.isBlank()) {
+            return accountsJson;
+        }
+        JsonNode parsed;
+        try {
+            parsed = mapper.readTree(accountsJson);
+        } catch (IOException e) {
+            // 형식이 깨진 JSON은 건드리지 않는다(그대로 두면 기존 동작대로 무시된다).
+            return accountsJson;
+        }
+        if (!parsed.isArray()) {
+            return accountsJson;
+        }
+        boolean anyChanged = false;
+        ArrayNode rebuilt = mapper.createArrayNode();
+        for (JsonNode acc : parsed) {
+            String user = acc.path("user").asText("");
+            String stored = acc.path("password").asText("");
+            String updated = cipher.needsReencrypt(stored) ? cipher.encrypt(cipher.decrypt(stored)) : stored;
+            if (!updated.equals(stored)) {
+                anyChanged = true;
+            }
+            ObjectNode node = mapper.createObjectNode();
+            node.put("user", user);
+            node.put("password", updated);
+            rebuilt.add(node);
+        }
+        return anyChanged ? rebuilt.toString() : accountsJson;
     }
 
     // oracle.env 제거 마이그레이션 5단계: alias(host 빈값 → tnsnames.ora) 경로를 완전히 삭제했으므로
@@ -142,7 +280,27 @@ public class DatabaseConfigService {
                     continue;
                 }
                 String sessionThresholds = inst.has("session_thresholds") ? inst.get("session_thresholds").toString() : null;
+                // databases.json의 비밀번호는 평문이거나 예전 B64(...) 형식이다. 이 자리에서 바로
+                // 암호화해 넣는다 - 뒤따르는 reencryptAllPasswords()가 어차피 올려주긴 하지만, 그
+                // 경우 평문이 dbconfig.db에 한 번 기록됐다가 덮어써져서 WAL/빈 페이지에 잔존할 수
+                // 있다. encrypt(decrypt(x))인 이유는 B64(...)를 그 문자열 그대로 암호화하면 안 되기
+                // 때문(decrypt가 레거시 값을 평문으로 풀어준다).
                 String accounts = inst.has("accounts") ? inst.get("accounts").toString() : null;
+                String password = inst.path("password").asText("");
+                try {
+                    password = cipher.encrypt(cipher.decrypt(password));
+                    accounts = reencryptAccountsJson(accounts);
+                } catch (RuntimeException e) {
+                    // 손상된 값(깨진 base64 등)이 섞여 있어도 기동 자체를 막지는 않는다 - 그 인스턴스만
+                    // 원본 그대로 넣고 넘어간다. 여기서 예외를 그냥 올리면 @PostConstruct가 실패해
+                    // 앱이 아예 못 뜬다(전체 마이그레이션이 인스턴스 하나 때문에 무산됨).
+                    // 원본으로 들어간 값은 뒤따르는 reencryptAllPasswords()가 다시 시도하고, 거기서도
+                    // 실패하면 행 단위로 ERROR를 남기므로 어느 인스턴스인지 드러난다.
+                    log.error("databases.json의 인스턴스 '{}' 비밀번호를 암호화하지 못해 원본 그대로 "
+                            + "이관합니다 - 관리 화면에서 비밀번호를 다시 입력하십시오. ({})", id, e.getMessage());
+                    password = inst.path("password").asText("");
+                    accounts = inst.has("accounts") ? inst.get("accounts").toString() : null;
+                }
                 jdbc.update("INSERT OR REPLACE INTO db_instances " +
                                 "(id, group_name, group_order, instance_order, name, db_type, host, port, sid, db_user, " +
                                 "password, connect_mode, pool_min_idle, pool_max_size, session_thresholds, accounts) " +
@@ -154,7 +312,7 @@ public class DatabaseConfigService {
                         inst.path("port").asInt(1521),
                         inst.path("sid").asText(""),
                         inst.path("user").asText(""),
-                        inst.path("password").asText(""),
+                        password,
                         inst.path("connect_mode").asText(""),
                         inst.hasNonNull("pool_min_idle") ? inst.path("pool_min_idle").asInt() : null,
                         inst.hasNonNull("pool_max_size") ? inst.path("pool_max_size").asInt() : null,
@@ -373,9 +531,9 @@ public class DatabaseConfigService {
                 List<Map<String, Object>> safeAccounts = new ArrayList<>();
                 for (JsonNode acc : mapper.readTree(accountsJson)) {
                     Map<String, Object> safeAcc = new LinkedHashMap<>();
-                    // Strip each extra account's (still B64-obfuscated, but not real encryption)
-                    // password - this response goes to every logged-in user, not just admins, same
-                    // as the top-level instance password above.
+                    // Strip each extra account's (AES-encrypted) password - this response goes to
+                    // every logged-in user, not just admins, same as the top-level instance
+                    // password above.
                     safeAcc.put("user", acc.path("user").asText(""));
                     safeAccounts.add(safeAcc);
                 }
@@ -389,24 +547,20 @@ public class DatabaseConfigService {
         return safe;
     }
 
-    // Not real encryption - just keeps the raw password out of a plain-text glance at the DB file.
-    // B64(...)-wrapped values are decoded; anything else passes through unchanged as plaintext.
-    private static final String B64_PREFIX = "B64(";
-    private static final String B64_SUFFIX = ")";
-
+    // 실제 AES-256-GCM 암호화(oracle.env 제거 마이그레이션 6단계, 2026-09-21). 저장 포맷과 키 관리는
+    // com.dbagent.security.CredentialCipher / MasterKeyProvider 참고. 예전 B64(...) 인코딩 값과 평문은
+    // CredentialCipher.decrypt()가 그대로 읽어주므로(마이그레이션 유예), 이 두 메서드의 시그니처는
+    // 그대로 두고 본문만 위임으로 바꿨다 - 호출부(fromRow/resolve/createInstance/updateInstance/
+    // buildAccountsJson)는 변경 없음.
     private String resolvePassword(String raw) {
-        if (raw == null || !raw.startsWith(B64_PREFIX) || !raw.endsWith(B64_SUFFIX)) {
-            return raw;
-        }
-        String encoded = raw.substring(B64_PREFIX.length(), raw.length() - B64_SUFFIX.length());
-        return new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+        return cipher.decrypt(raw);
     }
 
     private String encodePassword(String plain) {
         if (plain == null) {
             return "";
         }
-        return B64_PREFIX + Base64.getEncoder().encodeToString(plain.getBytes(StandardCharsets.UTF_8)) + B64_SUFFIX;
+        return cipher.encrypt(plain);
     }
 
     /** Admin UI: add a new DB instance under groupName (created if it doesn't already exist). */
@@ -559,7 +713,7 @@ public class DatabaseConfigService {
     /**
      * Rebuilds the "accounts" JSON array from the admin UI's rows - call only after
      * validateAccounts() has confirmed every row resolves to a password. A row with a blank
-     * password reuses the matching user's already-stored (still B64-encoded) password from
+     * password reuses the matching user's already-stored (AES-encrypted) password from
      * existingAccountsJson, if any.
      */
     private String buildAccountsJson(List<Map<String, String>> accounts, String existingAccountsJson) {

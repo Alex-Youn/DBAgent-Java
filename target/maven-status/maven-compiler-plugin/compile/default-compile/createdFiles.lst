@@ -32,6 +32,7 @@ com\dbagent\sqltuning\BindCaptureRequest.class
 com\dbagent\config\StaticResourceConfig.class
 com\dbagent\monitor\MonitorService.class
 com\dbagent\rdb\MySqlMonitorService.class
+com\dbagent\security\MasterKeyProvider.class
 com\dbagent\aidba\ChatRequest.class
 com\dbagent\rdb\PostgresMonitorService.class
 com\dbagent\sqltuning\SqlTuningAutoRequest.class
@@ -45,6 +46,7 @@ com\dbagent\DbAgentApplication.class
 com\dbagent\query\SqlQueryService.class
 com\dbagent\oracle\DatabaseConfigService.class
 com\dbagent\rdb\EngineMonitorService.class
+com\dbagent\security\CredentialCipher.class
 com\dbagent\sqlwriter\TableInfoRequest.class
 com\dbagent\monitor\InstanceMetricSamplerService.class
 com\dbagent\sqltuneadvisor\SqlTuneAdvisorRequest.class

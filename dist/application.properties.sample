@@ -27,15 +27,54 @@
 # HTTP 포트.
 #server.port=8006
 
+# ── 대상 DB 비밀번호 암호화 마스터 키 ───────────────────────────────────
+# 등록된 대상 DB 접속 비밀번호는 AES-256-GCM으로 암호화되어 저장된다(6단계, 2026-09-21).
+# 비워두거나 이 줄이 없으면 앱 작업 디렉터리의 dbagent.key를 쓰고, 그 파일이 없으면 최초 기동 시
+# 자동 생성한다 - 운영자가 미리 준비할 것은 없다. 환경변수 DBAGENT_MASTER_KEY가 있으면 우선한다.
+#
+# 운영 환경에서는 아래처럼 앱 폴더 밖(백업 스크립트가 훑지 않는 곳)을 지정하는 것을 권장한다 -
+# 키 파일과 dbconfig.db가 같이 유출되면 암호화가 무의미해지기 때문이다. 지정한 경로의 디렉터리는
+# 미리 있어야 하고(없으면 앱이 만들려고 시도함), 별도 장소에 사본 1부를 보관할 것.
+# 키를 잃으면 기존 암호문은 복구 불가 - 관리 화면에서 각 인스턴스 비밀번호를 다시 입력해야 한다.
+# 키는 환경마다 독립이다: dbconfig.db만 다른 서버로 복사하면 복호화되지 않는다(의도된 동작).
+#dbagent.security.key-file=C:/ProgramData/DBAgent/dbagent.key
+
 # ── 계정 DB / 로그인 세션 ────────────────────────────────────────────────
-# SQLite 파일 DB. 앱 작업 디렉터리 기준 상대 경로다.
-#spring.datasource.url=jdbc:sqlite:users.db
+# SQLite 파일 DB. 앱 작업 디렉터리 기준 상대 경로다. 기본값은 db_config/ 하위(2026-09-21부터 -
+# 앱 폴더 바로 밑에 DB 파일을 두지 않고 한 곳에 모아 관리하기 위함. 디렉터리는 미리 있어야 한다).
+# busy_timeout은 url 쿼리 파라미터로 준다 - PRAGMA를 connection-init-sql에 세미콜론으로 이어 붙이면
+# sqlite-jdbc가 두 번째 문장을 조용히 무시해서 안 먹는다(실측 확인, 2026-09-21).
+#spring.datasource.url=jdbc:sqlite:db_config/users.db?busy_timeout=5000
 #spring.datasource.driver-class-name=org.sqlite.JDBC
-# SQLite 는 동시 쓰기에 약해 풀 크기를 1 로 고정해 왔다. 올리지 말 것.
-#spring.datasource.hikari.maximum-pool-size=1
+# sessionForToken()이 모든 인증 요청마다 호출되는 고빈도 읽기 경로라 dbconfig.db와 동일하게 10으로
+# 통일한다(2026-09-21 - 과거 "SQLite는 동시 쓰기에 약해 1로 고정" 메모는 낡은 것: WAL 모드에서는
+# 읽기끼리 서로 안 막히므로 풀을 키워도 안전하다).
+#spring.datasource.hikari.maximum-pool-size=10
 # 로그인 세션 만료 기간(일). 로그아웃을 안 눌러도 이 기간이 지나면 토큰이 자동 만료되고,
 # 매일 새벽 3시 정리 작업이 해당 행을 실제로 삭제한다.
 #dbagent.auth.session-ttl-days=30
+
+# ── 메트릭 이력 저장소 위치 ────────────────────────────────────────────────
+# instance_metric_history(metrics.db)도 users.db와 함께 db_config/ 하위에 둔다. v2 대시보드의
+# fetchMetricHistoryV2()가 폴링마다 이 풀에서 읽기 커넥션을 빌려가므로 풀 크기도 동일하게 10.
+#dbagent.metrics.datasource.url=jdbc:sqlite:db_config/metrics.db?busy_timeout=5000
+#dbagent.metrics.datasource.hikari.maximum-pool-size=10
+
+# ── DB 목록 저장소(db_instances, 구 databases.json) ──────────────────────
+# 등록된 DB 목록(관리 화면 db-mgmt.html)을 담는 전용 SQLite(dbconfig.db). resolve()가 거의 모든
+# API 요청 진입부에서 호출되는 고빈도 읽기 경로인 데다, v2 대시보드는 폴링 한 번에 API 6개를
+# 동시에 쏘아 그 6개가 전부 이 풀에서 동시에 커넥션을 빌려간다 - 기본값 3은 그 시점에 바로
+# 바닥나서 "환경설정 DB 리스트가 가끔 느리다" 증상으로 이어질 수 있다(오케스트레이터 실측,
+# 2026-09-21). 등록된 DB 개수(테이블 행 수) 자체는 인덱스 단건 조회라 거의 영향이 없고, 동시
+# 열람 탭/사용자 수가 실제 병목이다. users.db/metrics.db와 풀 크기 10으로 통일(2026-09-21).
+#dbagent.dbconfig.datasource.hikari.maximum-pool-size=10
+# busy_timeout(ms, url 쿼리 파라미터로 준다 - connection-init-sql에 PRAGMA journal_mode=WAL 뒤에
+# 세미콜론으로 이어 붙이면 sqlite-jdbc가 두 번째 문장을 조용히 무시해서 안 먹는다, 실측 확인
+# 2026-09-21). "database is locked"를 즉시 던지지 않고 이 시간만큼 내부적으로 재시도하며 기다리게
+# 한다 - 풀을 키운 만큼(10) 커밋 순간과 맞물릴 확률도 같이 올라가는 데 대한 안전마진.
+# 경로는 db_config/ 하위(위 계정 DB 섹션 참고) - dbconfig.db만 다른 곳에 두고 싶으면 여기 경로만
+# 바꾸면 된다.
+#dbagent.dbconfig.datasource.url=jdbc:sqlite:db_config/dbconfig.db?busy_timeout=5000
 
 # ── Oracle 대상 설정 ─────────────────────────────────────────────────────
 # 새 Oracle 커넥션을 수립하는 최대 시간(ms). 망 지연이 크면 올린다(작으면 정상 DB를 down 으로 오판).
