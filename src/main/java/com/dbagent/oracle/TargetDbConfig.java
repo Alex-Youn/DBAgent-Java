@@ -10,11 +10,15 @@ public record TargetDbConfig(
         String host,
         int port,
         String sid,
-        // null/blank = legacy behavior (host blank -> sid treated as TNS alias, host set -> host:port:sid).
-        // "sid" = explicit host:port:sid; "service" = host:port/service_name (sid field holds the service
-        // name); "descriptor" = sid field holds a full connect descriptor/TNS string, host/port ignored.
+        // null/blank = default host:port:sid. "sid" = explicit host:port:sid; "service" =
+        // host:port/service_name (sid field holds the service name); "descriptor" = sid field holds a
+        // full connect descriptor/TNS string, host/port ignored.
         String connectMode,
         // null = not set in databases.json, caller should fall back to the application.properties default.
         Integer poolMinIdle,
-        Integer poolMaxSize) {
+        Integer poolMaxSize,
+        // null/blank = no check. Oracle-only (compared against v$instance.instance_name on first
+        // successful connection) - catches a mistyped host/port that happens to reach a real, but wrong,
+        // instance (oracle.env 제거 마이그레이션 5단계, see PoolTestController).
+        String expectedInstanceName) {
 }

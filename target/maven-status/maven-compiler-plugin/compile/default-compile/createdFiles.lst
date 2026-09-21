@@ -19,7 +19,6 @@ com\dbagent\query\SqlQueryRequest.class
 com\dbagent\sqltuning\SqlTuningController.class
 com\dbagent\sqltuneadvisor\SqlTuneAdvisorController.class
 com\dbagent\monitor\MonitorController.class
-com\dbagent\oracle\TnsAdminInitializer.class
 com\dbagent\query\ExecutionPlanService.class
 com\dbagent\rdb\RdbConnectionPoolManager.class
 com\dbagent\sqltuning\SqlTuningRequest.class

@@ -16,12 +16,18 @@ public record UpdateDbInstanceRequest(
         String sid,
         String user,
         String password,
+        // null/blank = host:port:sid (default). "sid"/"service"/"descriptor" - see
+        // OracleConnectionPoolManager.buildDsn(). Oracle-only; ignored for other db_type values.
+        @JsonProperty("connect_mode") String connectMode,
+        // null/blank = no check - compared against v$instance.instance_name on first connection.
+        // Oracle-only; see TargetDbConfig, PoolTestController.
+        @JsonProperty("expected_instance_name") String expectedInstanceName,
         @JsonProperty("pool_min_idle") Integer poolMinIdle,
         @JsonProperty("pool_max_size") Integer poolMaxSize,
         // Extra accounts: each map has "user" and "password" keys; a blank password keeps that
-        // account's currently stored password - see DatabaseConfigService.applyAccounts.
+        // account's currently stored password - see DatabaseConfigService.buildAccountsJson.
         List<Map<String, String>> accounts,
-        // 5 ascending ints, or null/empty to not override the global default - see databases.json's
-        // "session_thresholds" and DatabaseConfigService.applySessionThresholds.
+        // 5 ascending ints, or null/empty to not override the global default - see db_instances'
+        // "session_thresholds" column and DatabaseConfigService.buildSessionThresholdsJson.
         @JsonProperty("session_thresholds") List<Integer> sessionThresholds) {
 }

@@ -62,4 +62,25 @@ public class DataSourceConfig {
     public JdbcTemplate metricsJdbcTemplate(@Qualifier("metricsDataSource") DataSource dataSource) {
         return new JdbcTemplate(dataSource);
     }
+
+    // db_instances(구 databases.json) 전용 SQLite - 같은 이유로 users.db/metrics.db와 파일을 분리한다
+    // (oracle.env 제거 마이그레이션 4-1단계, 2026-09-21). 읽기 빈도는 훨씬 높지만(대시보드 요청마다
+    // resolve() 호출) 쓰기는 관리자 DB 추가/수정/삭제 때뿐이라 락 경합 위험 자체는 낮지만, 관심사 분리
+    // 원칙을 그대로 따른다.
+    @Bean(name = "dbConfigDataSourceProperties")
+    @ConfigurationProperties("dbagent.dbconfig.datasource")
+    public DataSourceProperties dbConfigDataSourceProperties() {
+        return new DataSourceProperties();
+    }
+
+    @Bean(name = "dbConfigDataSource")
+    @ConfigurationProperties("dbagent.dbconfig.datasource.hikari")
+    public HikariDataSource dbConfigDataSource(@Qualifier("dbConfigDataSourceProperties") DataSourceProperties properties) {
+        return properties.initializeDataSourceBuilder().type(HikariDataSource.class).build();
+    }
+
+    @Bean(name = "dbConfigJdbcTemplate")
+    public JdbcTemplate dbConfigJdbcTemplate(@Qualifier("dbConfigDataSource") DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
 }
