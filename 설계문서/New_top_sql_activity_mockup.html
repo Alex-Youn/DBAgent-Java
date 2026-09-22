@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top SQL Activity Timeline 목업</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f9f9f7; color: #0b0b0b; }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) body { background: #0d0d0d; color: #ffffff; }
+  }
+  :root[data-theme="dark"] body { background: #0d0d0d; color: #ffffff; }
+
+  .viz-root {
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --good: #0ca30c;
+
+    /* Chart 1 — Active Session by Wait Class (fixed brand colors, per prior spec) */
+    --as-1: #22d3ee; /* CPU */
+    --as-2: #808000; /* Latch */
+    --as-3: #2ecc71; /* User I/O */
+    --as-4: #7c3aed; /* TX Lock */
+    --as-5: #e67e22; /* Sys I/O */
+    --as-6: #be123c; /* TM Lock */
+    --as-7: var(--text-muted); /* Other */
+
+    /* Chart 2 — Top SQL Activity Timeline reuses Chart 1's event colors (--as-*)
+       directly, so the same hue means the same wait event in both graphs. */
+
+    --select-fill: rgba(11,11,11,0.08);
+    --select-line: var(--text-secondary);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --good: #0ca30c;
+      --as-1: #22d3ee; --as-2: #808000; --as-3: #2ecc71; --as-4: #7c3aed; --as-5: #e67e22; --as-6: #be123c; --as-7: var(--text-muted);
+      --select-fill: rgba(255,255,255,0.10);
+      --select-line: var(--text-secondary);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --good: #0ca30c;
+    --as-1: #22d3ee; --as-2: #808000; --as-3: #2ecc71; --as-4: #7c3aed; --as-5: #e67e22; --as-6: #be123c; --as-7: var(--text-muted);
+    --sq-1: #3987e5; --sq-2: #d95926; --sq-3: #199e70; --sq-4: #c98500; --sq-5: #d55181; --sq-6: #008300;
+    --select-fill: rgba(57,135,229,0.20);
+    --select-line: #3987e5;
+  }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; position: relative; }
+  .theme-toggle { position: absolute; top: 24px; right: 20px; font-size: 12px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; }
+
+  .top-note { font-size: 13px; color: var(--text-secondary); line-height: 1.6; background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px; }
+  .top-note b { color: var(--text-primary); }
+
+  .filter-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .seg { display: inline-flex; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 2px; gap: 2px; }
+  .seg button { font: inherit; font-size: 12.5px; color: var(--text-secondary); background: transparent; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .seg button.active { background: var(--as-1); color: #fff; }
+  .spacer { flex: 1; }
+  .checkbox-label { font-size: 12.5px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 880px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 8px; position: relative; }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px; gap: 8px; }
+  .card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+  .card-tools { display: flex; gap: 10px; }
+  .card-caption { font-size: 11.5px; color: var(--text-muted); margin-bottom: 6px; line-height: 1.5; }
+
+  svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: none; }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .axis-line { stroke: var(--baseline); stroke-width: 1; }
+  .tick-label { fill: var(--text-muted); font-size: 10.5px; }
+  .ref-line { stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .ref-label { fill: var(--text-secondary); font-size: 10.5px; }
+  .crosshair { stroke: var(--text-muted); stroke-width: 1; pointer-events: none; opacity: 0; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 2px 14px; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+  .tooltip { position: absolute; pointer-events: none; z-index: 5; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; font-size: 11.5px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); opacity: 0; transition: opacity 80ms ease; min-width: 175px; }
+  .tooltip .t-time { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+  .tooltip .t-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 1.5px 0; }
+  .tooltip .t-key { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .tooltip .t-key .stroke { width: 10px; height: 2px; display: inline-block; border-radius: 1px; }
+  .tooltip .t-val { color: var(--text-primary); font-weight: 600; }
+  .tooltip .t-total { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; }
+
+  .drag-hint { font-size: 11.5px; color: var(--select-line); margin: 2px 0 6px; display: flex; align-items: center; gap: 6px; }
+  .drag-hint svg { width: 13px; height: 13px; display: inline; }
+
+  .selection-summary { display: none; align-items: center; flex-wrap: wrap; gap: 16px; background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin: 10px 0; font-size: 12px; }
+  .selection-summary.show { display: flex; }
+  .selection-summary .item .label { color: var(--text-muted); font-size: 11px; }
+  .selection-summary .item .value { color: var(--text-primary); font-weight: 600; }
+  .selection-summary .clear-btn { margin-left: auto; font-size: 11.5px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+
+  .session-table-wrap { display: none; overflow-x: auto; margin-bottom: 8px; }
+  .session-table-wrap.show { display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th, td { text-align: left; padding: 6px 9px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }
+  th { color: var(--text-muted); font-weight: 500; }
+  td { color: var(--text-secondary); }
+  td.mono { font-variant-numeric: tabular-nums; }
+  td.sqltext { color: var(--text-primary); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .sql-key { display: inline-flex; align-items: center; gap: 6px; }
+  .sql-key .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex: none; }
+
+  .table-wrap { margin-top: 8px; overflow-x: auto; display: none; }
+  .table-wrap.show { display: block; }
+  th.tabular, td.tabular { font-variant-numeric: tabular-nums; text-align: right; }
+  td.total { color: var(--text-primary); font-weight: 600; }
+
+  .footnote { font-size: 11px; color: var(--text-muted); margin: 12px 2px 0; line-height: 1.6; }
+
+  .legend-item.clickable { cursor: pointer; }
+  .legend-item.clickable:hover .legend-label { text-decoration: underline; }
+  .legend-item .chev { font-size: 9px; color: var(--text-muted); margin-left: 1px; }
+
+  .other-drill { display: none; margin-top: 10px; padding: 12px 14px; background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; }
+  .other-drill.show { display: block; }
+  .other-drill-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; gap: 10px; }
+  .other-drill-title { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+  .other-drill-scope { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .other-drill-close { font-size: 11px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; cursor: pointer; flex: none; }
+  .other-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 11.5px; }
+  .other-row .rank { width: 16px; color: var(--text-muted); text-align: right; flex: none; }
+  .other-row .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .other-row .name { width: 110px; flex: none; color: var(--text-primary); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .other-row .barwrap { flex: 1; background: var(--gridline); border-radius: 3px; height: 10px; overflow: hidden; }
+  .other-row .bar { height: 100%; border-radius: 3px; }
+  .other-row .pct { width: 46px; text-align: right; color: var(--text-secondary); flex: none; font-variant-numeric: tabular-nums; }
+  .other-row .cat-label { width: 68px; flex: none; color: var(--text-muted); font-size: 10.5px; }
+  .other-tail-note { font-size: 11px; color: var(--text-muted); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="page viz-root">
+  <button class="theme-toggle" id="themeToggle" type="button">다크 모드</button>
+  <h1>Active Session + Top SQL Activity — 목업</h1>
+  <p class="sub">두 그래프를 나란히 배치 · Top SQL 타임라인은 드래그로 구간을 선택해 세션 상세를 확인</p>
+
+  <div class="top-note">
+    왼쪽은 기존 <b>Active Session(대기 유형별)</b> 그래프, 오른쪽이 이번에 추가한 <b>Top SQL Activity Timeline</b>입니다.
+    같은 시간축을 공유해서 "언제 세션이 몰렸는지"와 "그 시점에 어떤 SQL이 주된 원인이었는지"를 함께 볼 수 있습니다.
+    <b>색상은 두 그래프가 동일한 이벤트 팔레트를 공유</b>합니다 — 오른쪽 SQL이 올리브색이면 그 SQL은 주로 Latch 대기,
+    보라색이면 TX Lock 대기가 특징이라는 뜻이라 왼쪽 그래프와 바로 대응해서 볼 수 있습니다(범례에 카테고리를 함께 표기).
+    실시간 갱신 시에도 같은 색=같은 이벤트 규칙은 고정되어 있어 매번 다시 파악할 필요가 없습니다.
+    오른쪽 그래프에서 <b>마우스로 구간을 드래그</b>하면 그 구간에 활동한 세션 상세 목록이 아래에 나타납니다.
+  </div>
+
+  <div class="filter-row">
+    <div class="seg" id="rangeSeg">
+      <button data-range="30">30분</button>
+      <button data-range="60" class="active">1시간</button>
+      <button data-range="360">6시간</button>
+      <button data-range="1440">24시간</button>
+    </div>
+    <div class="spacer"></div>
+    <label class="checkbox-label"><input type="checkbox" id="textureToggle"> 고대비 텍스처(색약 대응)</label>
+    <label class="checkbox-label"><input type="checkbox" id="tableToggle"> Top SQL 표로 보기</label>
+  </div>
+
+  <div class="grid-2">
+    <!-- Chart 1: Active Session by Wait Class (compact reference view) -->
+    <div class="card">
+      <div class="card-head"><div class="card-title">Active Sessions by Wait Class</div></div>
+      <div class="card-caption">점선 = CPU 코어 수(8). 전체 기능(막대 전환·텍스처·표 보기)은 별도 Active Session 목업 참고.</div>
+      <svg id="chart1" viewBox="0 0 900 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="tooltip" id="tooltip1"></div>
+      <div class="legend" id="legend1"></div>
+    </div>
+
+    <!-- Chart 2: Top SQL Activity Timeline (drag-to-inspect) -->
+    <div class="card">
+      <div class="card-head"><div class="card-title">Top SQL Activity Timeline</div></div>
+      <div class="card-caption">Top 5 SQL_ID + Other · 색상 = 각 SQL의 주된 대기 이벤트(왼쪽 그래프와 동일 팔레트). 범례에 카테고리 표기.</div>
+      <div class="drag-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3"/></svg>
+        그래프를 드래그해서 구간을 선택하면 세션 상세가 표시됩니다
+      </div>
+      <svg id="chart2" viewBox="0 0 900 320" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="tooltip" id="tooltip2"></div>
+      <div class="legend" id="legend2"></div>
+
+      <div class="other-drill" id="otherDrillWrap">
+        <div class="other-drill-head">
+          <div>
+            <div class="other-drill-title">Other 안의 SQL 순위</div>
+            <div class="other-drill-scope" id="otherDrillScope">–</div>
+          </div>
+          <button class="other-drill-close" id="otherDrillClose" type="button">닫기</button>
+        </div>
+        <div id="otherDrillList"></div>
+        <div class="other-tail-note" id="otherDrillNote"></div>
+      </div>
+
+      <div class="selection-summary" id="selSummary">
+        <div class="item"><div class="label">선택 구간</div><div class="value" id="selRange">–</div></div>
+        <div class="item"><div class="label">구간 평균 AAS</div><div class="value" id="selAvg">–</div></div>
+        <div class="item"><div class="label">주요 SQL</div><div class="value" id="selTopSql">–</div></div>
+        <button class="clear-btn" id="clearSel" type="button">선택 해제</button>
+      </div>
+
+      <div class="session-table-wrap" id="sessionTableWrap">
+        <table>
+          <thead><tr><th>SID</th><th>SERIAL#</th><th>SQL_ID</th><th>SQL 미리보기</th><th>모듈</th><th>대기 이벤트</th><th class="tabular">경과(초)</th></tr></thead>
+          <tbody id="sessionTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap" id="tableWrap2">
+        <table>
+          <thead><tr id="tableHead2"></tr></thead>
+          <tbody id="tableBody2"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p class="footnote">
+    Top SQL 팔레트는 색각이상(CVD) 대응 검증을 거친 기본 카테고리 팔레트를 사용했습니다. 세션 상세 데이터는 예시용으로 생성된 값입니다.
+  </p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var root = document.querySelector(".viz-root");
+  function cssColor(v) { return getComputedStyle(root).getPropertyValue(v).trim(); }
+  function darken(hex, f) {
+    hex = hex.replace("#", "");
+    if (hex.length !== 6) return hex; // e.g. resolved rgb() from var(--text-muted) chain edge case
+    var r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+    r = Math.round(r*f); g = Math.round(g*f); b = Math.round(b*f);
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+  function svgEl(tag, attrs) {
+    var e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function niceMax(v) {
+    var steps = [4,6,8,10,12,16,20,24,30,40,50];
+    for (var i=0;i<steps.length;i++) if (steps[i] >= v) return steps[i];
+    return Math.ceil(v/10)*10;
+  }
+
+  var RANGE_POINTS = { 30: 30, 60: 60, 360: 72, 1440: 96 };
+  var RANGE_MIN_STEP = { 30: 1, 60: 1, 360: 5, 1440: 15 };
+  var state = { range: 60, texture: false, table: false };
+
+  function timeLabel(idxFromNow, stepMin) {
+    var mins = idxFromNow * stepMin;
+    if (mins === 0) return "지금";
+    if (mins % 60 === 0) return "-" + (mins/60) + "시간";
+    return "-" + mins + "분";
+  }
+  function isoTime(idxFromNow, stepMin) {
+    var mins = idxFromNow * stepMin;
+    return mins === 0 ? "지금" : ("-" + mins + "분");
+  }
+
+  var W = 900, H = 320;
+  var M = { top: 14, right: 16, bottom: 30, left: 40 };
+  var plotW = W - M.left - M.right;
+  var plotH = H - M.top - M.bottom;
+  function xScale(i, n) { return M.left + (n <= 1 ? 0 : (i/(n-1)) * plotW); }
+  function yScale(v, maxY) { return M.top + plotH - (v/maxY) * plotH; }
+
+  // ---------------- Chart 1: Active Session by Wait Class ----------------
+  var CATS1 = [
+    { key:"cpu",   label:"CPU",      css:"--as-1" },
+    { key:"latch", label:"Latch",    css:"--as-2" },
+    { key:"uio",   label:"User I/O", css:"--as-3" },
+    { key:"tx",    label:"TX Lock",  css:"--as-4" },
+    { key:"sio",   label:"Sys I/O",  css:"--as-5" },
+    { key:"tm",    label:"TM Lock",  css:"--as-6" },
+    { key:"oth",   label:"Other",    css:"--as-7" }
+  ];
+  var CPU_CORES = 8;
+  var rand1 = mulberry32(20260922);
+  function genData1(points) {
+    var out = [];
+    var base = [2.0, 0.25, 1.0, 0.25, 0.6, 0.2, 0.3];
+    var phase = rand1() * 10;
+    for (var i=0;i<points;i++) {
+      var wave = Math.sin(i/points*Math.PI*2 + phase)*0.5+0.5;
+      var ioSpike = (i > points*0.55 && i < points*0.68) ? 1 : 0;
+      var lockSpike = (i > points*0.20 && i < points*0.30) ? 1 : 0;
+      var row = { i:i, values:[] };
+      for (var c=0;c<CATS1.length;c++) {
+        var v = base[c]*(0.6+wave*1.6) + (rand1()-0.5)*base[c]*0.6;
+        if (ioSpike) v += base[c]*(c===0||c===2||c===4?3.0:0.4)*(0.6+rand1()*0.6);
+        if (lockSpike) v += base[c]*(c===1||c===3||c===5?6.0:0.3)*(0.6+rand1()*0.6);
+        row.values.push(Math.max(0,v));
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  function buildLegend(el, cats, opts) {
+    el.innerHTML = "";
+    cats.forEach(function (cat) {
+      var item = document.createElement("span"); item.className = "legend-item";
+      var sw = document.createElement("span"); sw.className = "legend-swatch"; sw.style.background = "var(" + cat.css + ")";
+      item.appendChild(sw);
+      var t = document.createElement("span"); t.className = "legend-label";
+      t.textContent = cat.cat ? (cat.label + " (" + cat.cat + ")") : cat.label;
+      item.appendChild(t);
+      if (opts && opts.onOtherClick && cat.key === "oth") {
+        item.classList.add("clickable");
+        var chev = document.createElement("span"); chev.className = "chev"; chev.textContent = "▸"; item.appendChild(chev);
+        item.title = "클릭하면 Other 안에 뭉친 SQL 순위를 펼쳐 봅니다";
+        item.addEventListener("click", function () { opts.onOtherClick(item, chev); });
+      }
+      el.appendChild(item);
+    });
+  }
+
+  function renderChart1() {
+    var points = RANGE_POINTS[state.range];
+    var stepMin = RANGE_MIN_STEP[state.range];
+    var data = genData1(points);
+    var n = data.length;
+    var cum = data.map(function (row) { var c=[0]; for (var k=0;k<CATS1.length;k++) c.push(c[k]+row.values[k]); return c; });
+    var totals = cum.map(function (c) { return c[CATS1.length]; });
+    var maxVal = niceMax(Math.max.apply(null, totals.concat([CPU_CORES]))*1.15);
+
+    var svg = document.getElementById("chart1");
+    svg.innerHTML = "";
+    for (var g=0; g<=4; g++) {
+      var val = (maxVal/4)*g, y = yScale(val, maxVal);
+      svg.appendChild(svgEl("line", { class:"gridline", x1:M.left, x2:W-M.right, y1:y, y2:y }));
+      var lbl = svgEl("text", { class:"tick-label", x:M.left-7, y:y+4, "text-anchor":"end" }); lbl.textContent = Math.round(val);
+      svg.appendChild(lbl);
+    }
+    svg.appendChild(svgEl("line", { class:"axis-line", x1:M.left, x2:W-M.right, y1:M.top+plotH, y2:M.top+plotH }));
+    for (var t=0;t<=5;t++) {
+      var idx = Math.round((t/5)*(n-1)); var x = xScale(idx,n); var idxFromNow = n-1-idx;
+      var txt = svgEl("text", { class:"tick-label", x:x, y:H-8, "text-anchor": t===5?"end":(t===0?"start":"middle") });
+      txt.textContent = timeLabel(idxFromNow, stepMin); svg.appendChild(txt);
+    }
+    for (var k=0;k<CATS1.length;k++) {
+      var top=k+1, bot=k;
+      var d = "M "+xScale(0,n)+" "+yScale(cum[0][bot],maxVal);
+      for (var i=1;i<n;i++) d += " L "+xScale(i,n)+" "+yScale(cum[i][bot],maxVal);
+      for (var j=n-1;j>=0;j--) d += " L "+xScale(j,n)+" "+yScale(cum[j][top],maxVal);
+      d += " Z";
+      svg.appendChild(svgEl("path", { d:d, fill:cssColor(CATS1[k].css), "fill-opacity":0.82, stroke:"var(--surface-1)", "stroke-width":1.4 }));
+    }
+    var refY = yScale(CPU_CORES, maxVal);
+    svg.appendChild(svgEl("line", { class:"ref-line", x1:M.left, x2:W-M.right, y1:refY, y2:refY }));
+    var refLbl = svgEl("text", { class:"ref-label", x:W-M.right, y:refY-6, "text-anchor":"end" }); refLbl.textContent = "CPU 코어: 8";
+    svg.appendChild(refLbl);
+
+    var crosshair = svgEl("line", { class:"crosshair", x1:0, x2:0, y1:M.top, y2:M.top+plotH });
+    svg.appendChild(crosshair);
+    var overlay = svgEl("rect", { x:M.left, y:M.top, width:plotW, height:plotH, fill:"transparent" });
+    svg.appendChild(overlay);
+    var tooltip = document.getElementById("tooltip1");
+
+    overlay.addEventListener("pointermove", function (evt) {
+      var rect = svg.getBoundingClientRect(); var scaleX = W/rect.width;
+      var px = (evt.clientX-rect.left)*scaleX;
+      var rel = (px-M.left)/plotW; var idx = Math.max(0, Math.min(n-1, Math.round(rel*(n-1))));
+      var x = xScale(idx,n); crosshair.setAttribute("x1",x); crosshair.setAttribute("x2",x); crosshair.style.opacity = 1;
+      tooltip.innerHTML = "";
+      var head = document.createElement("div"); head.className="t-time"; head.textContent = timeLabel(n-1-idx, stepMin); tooltip.appendChild(head);
+      for (var ci=CATS1.length-1; ci>=0; ci--) {
+        var row = document.createElement("div"); row.className="t-row";
+        var kw = document.createElement("span"); kw.className="t-key";
+        var st = document.createElement("span"); st.className="stroke"; st.style.background = cssColor(CATS1[ci].css); kw.appendChild(st);
+        var nm = document.createElement("span"); nm.textContent = CATS1[ci].label; kw.appendChild(nm); row.appendChild(kw);
+        var val = document.createElement("span"); val.className="t-val"; val.textContent = data[idx].values[ci].toFixed(1); row.appendChild(val);
+        tooltip.appendChild(row);
+      }
+      var tr = document.createElement("div"); tr.className="t-total";
+      var tl = document.createElement("span"); tl.textContent = "합계"; var tv = document.createElement("span"); tv.className="t-val"; tv.textContent = totals[idx].toFixed(1);
+      tr.appendChild(tl); tr.appendChild(tv); tooltip.appendChild(tr);
+      var left = (x/W)*rect.width;
+      tooltip.style.left = Math.min(rect.width-190, Math.max(0,left+12))+"px"; tooltip.style.top = "6px"; tooltip.style.opacity = 1;
+    });
+    overlay.addEventListener("pointerleave", function () { crosshair.style.opacity = 0; tooltip.style.opacity = 0; });
+
+    buildLegend(document.getElementById("legend1"), CATS1);
+  }
+
+  // ---------------- Chart 2: Top SQL Activity Timeline ----------------
+  // Colors reuse Chart 1's event palette (--as-*) directly — same hue = same wait
+  // event in both graphs, so a spike's color here tells you which wait class it
+  // maps to on the left without cross-checking. Order re-validated for this subset
+  // (CPU, Latch, User I/O, TX Lock, TM Lock, Other — Sys I/O omitted: background
+  // process I/O isn't naturally attributable to one foreground SQL_ID).
+  var CATS2 = [
+    { key:"a",   label:"SQL-A1B2C3", cat:"CPU",      css:"--as-1", module:"OrderService",     text:"SELECT * FROM ORDERS WHERE STATUS=:1 AND CREATED_DT>:2",            waits:["CPU","db file sequential read"] },
+    { key:"c",   label:"SQL-G7H8I9", cat:"Latch",     css:"--as-2", module:"Analytics",        text:"SELECT COUNT(*) FROM SESSION_LOG WHERE ...",                        waits:["latch: cache buffers chains","CPU"] },
+    { key:"b",   label:"SQL-D4E5F6", cat:"User I/O",  css:"--as-3", module:"ReportBatch",      text:"SELECT /*+ FULL(T) */ * FROM SALES_FACT T WHERE ...",               waits:["db file scattered read","direct path read"] },
+    { key:"d",   label:"SQL-J1K2L3", cat:"TX Lock",   css:"--as-4", module:"InventoryService", text:"UPDATE INVENTORY SET QTY=QTY-:1 WHERE ITEM_ID=:2",                  waits:["enq: TX - row lock contention"] },
+    { key:"e",   label:"SQL-M4N5O6", cat:"TM Lock",   css:"--as-6", module:"BatchLoader",      text:"MERGE INTO INVENTORY_STAGING s USING DELTA_FEED d ON (...) ...",    waits:["enq: TM - contention"] },
+    { key:"oth", label:"Other",      cat:"Other",     css:"--as-7", module:"Various",          text:"(기타 SQL 다수)",                                                    waits:["various"] }
+  ];
+  var rand2 = mulberry32(7712026);
+  function genData2(points) {
+    var out = [];
+    // index: 0 CPU(A) · 1 Latch(C) · 2 User I/O(B) · 3 TX Lock(D) · 4 TM Lock(E) · 5 Other
+    var base = [0.55, 0.20, 0.45, 0.15, 0.12, 0.25];
+    var phase = rand2()*10;
+    for (var i=0;i<points;i++) {
+      var wave = Math.sin(i/points*Math.PI*2 + phase)*0.5+0.5;
+      var ioSpike = (i > points*0.55 && i < points*0.68) ? 1 : 0;   // mirrors Chart 1's CPU/User I/O/Sys I/O spike
+      var lockSpike = (i > points*0.18 && i < points*0.32) ? 1 : 0; // mirrors Chart 1's Latch/TX/TM spike
+      var row = { i:i, values:[] };
+      for (var c=0;c<CATS2.length;c++) {
+        var v = base[c]*(0.6+wave*1.4) + (rand2()-0.5)*base[c]*0.5;
+        if (ioSpike) v += base[c]*(c===0||c===2?6.0:0.2)*(0.6+rand2()*0.6);        // SQL A(CPU), B(User I/O)
+        if (lockSpike) v += base[c]*(c===1?7.0:(c===3||c===4?18.0:0.2))*(0.6+rand2()*0.6); // SQL C(Latch), D(TX), E(TM)
+        row.values.push(Math.max(0,v));
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  var chart2 = { data: null, n: 0, stepMin: 1, cum: null, totals: null, maxVal: 1 };
+  var brush = { active: false, startIdx: null, endIdx: null, selected: false };
+  var otherDrillOpen = false;
+
+  function buildDefs2(defs) {
+    CATS2.forEach(function (cat, ci) {
+      var color = cssColor(cat.css);
+      var pat = svgEl("pattern", { id:"tex2-"+cat.key, width:6, height:6, patternUnits:"userSpaceOnUse", patternTransform:"rotate("+(ci%2===0?45:135)+")" });
+      pat.appendChild(svgEl("rect", { width:6, height:6, fill:color, "fill-opacity":0.55 }));
+      pat.appendChild(svgEl("path", { d:"M0,6 L6,0", stroke:darken(color,0.5), "stroke-width":1.6 }));
+      defs.appendChild(pat);
+    });
+  }
+
+  function renderChart2() {
+    var points = RANGE_POINTS[state.range];
+    var stepMin = RANGE_MIN_STEP[state.range];
+    var data = genData2(points);
+    var n = data.length;
+    var cum = data.map(function (row) { var c=[0]; for (var k=0;k<CATS2.length;k++) c.push(c[k]+row.values[k]); return c; });
+    var totals = cum.map(function (c) { return c[CATS2.length]; });
+    var maxVal = niceMax(Math.max.apply(null, totals)*1.15);
+    chart2.data=data; chart2.n=n; chart2.stepMin=stepMin; chart2.cum=cum; chart2.totals=totals; chart2.maxVal=maxVal;
+
+    var svg = document.getElementById("chart2");
+    svg.innerHTML = "";
+    var defs = svgEl("defs", {}); svg.appendChild(defs); buildDefs2(defs);
+
+    for (var g=0; g<=4; g++) {
+      var val = (maxVal/4)*g, y = yScale(val, maxVal);
+      svg.appendChild(svgEl("line", { class:"gridline", x1:M.left, x2:W-M.right, y1:y, y2:y }));
+      var lbl = svgEl("text", { class:"tick-label", x:M.left-7, y:y+4, "text-anchor":"end" }); lbl.textContent = Math.round(val);
+      svg.appendChild(lbl);
+    }
+    svg.appendChild(svgEl("line", { class:"axis-line", x1:M.left, x2:W-M.right, y1:M.top+plotH, y2:M.top+plotH }));
+    for (var t=0;t<=5;t++) {
+      var idx = Math.round((t/5)*(n-1)); var x = xScale(idx,n); var idxFromNow = n-1-idx;
+      var txt = svgEl("text", { class:"tick-label", x:x, y:H-8, "text-anchor": t===5?"end":(t===0?"start":"middle") });
+      txt.textContent = timeLabel(idxFromNow, stepMin); svg.appendChild(txt);
+    }
+
+    var bandGroup = svgEl("g", { id:"bands2" });
+    for (var k=0;k<CATS2.length;k++) {
+      var top=k+1, bot=k;
+      var d = "M "+xScale(0,n)+" "+yScale(cum[0][bot],maxVal);
+      for (var i=1;i<n;i++) d += " L "+xScale(i,n)+" "+yScale(cum[i][bot],maxVal);
+      for (var j=n-1;j>=0;j--) d += " L "+xScale(j,n)+" "+yScale(cum[j][top],maxVal);
+      d += " Z";
+      var fill = state.texture ? ("url(#tex2-"+CATS2[k].key+")") : cssColor(CATS2[k].css);
+      var opacity = state.texture ? 1 : 0.82;
+      bandGroup.appendChild(svgEl("path", { d:d, fill:fill, "fill-opacity":opacity, stroke:"var(--surface-1)", "stroke-width":1.4 }));
+    }
+    svg.appendChild(bandGroup);
+
+    // selection band (drawn above data, below crosshair)
+    var selRect = svgEl("rect", { id:"selRect2", x:0, y:M.top, width:0, height:plotH, fill:"var(--select-fill)", stroke:"none", opacity:0 });
+    var selLineA = svgEl("line", { id:"selLineA", class:"ref-line", stroke:"var(--select-line)", "stroke-dasharray":"3 3", x1:0, x2:0, y1:M.top, y2:M.top+plotH, opacity:0 });
+    var selLineB = svgEl("line", { id:"selLineB", class:"ref-line", stroke:"var(--select-line)", "stroke-dasharray":"3 3", x1:0, x2:0, y1:M.top, y2:M.top+plotH, opacity:0 });
+    svg.appendChild(selRect); svg.appendChild(selLineA); svg.appendChild(selLineB);
+
+    var crosshair = svgEl("line", { class:"crosshair", x1:0, x2:0, y1:M.top, y2:M.top+plotH });
+    svg.appendChild(crosshair);
+
+    var overlay = svgEl("rect", { x:M.left, y:M.top, width:plotW, height:plotH, fill:"transparent", cursor:"crosshair" });
+    svg.appendChild(overlay);
+    var tooltip = document.getElementById("tooltip2");
+
+    function idxAt(evt) {
+      var rect = svg.getBoundingClientRect(); var scaleX = W/rect.width;
+      var px = (evt.clientX-rect.left)*scaleX;
+      var rel = (px-M.left)/plotW;
+      return Math.max(0, Math.min(n-1, Math.round(rel*(n-1))));
+    }
+
+    function drawSelection(i0, i1) {
+      var lo = Math.min(i0,i1), hi = Math.max(i0,i1);
+      var x0 = xScale(lo,n), x1 = xScale(hi,n);
+      selRect.setAttribute("x", x0); selRect.setAttribute("width", Math.max(1, x1-x0)); selRect.setAttribute("opacity", 1);
+      selLineA.setAttribute("x1", x0); selLineA.setAttribute("x2", x0); selLineA.setAttribute("opacity", 1);
+      selLineB.setAttribute("x1", x1); selLineB.setAttribute("x2", x1); selLineB.setAttribute("opacity", 1);
+    }
+    function hideSelection() {
+      selRect.setAttribute("opacity", 0); selLineA.setAttribute("opacity", 0); selLineB.setAttribute("opacity", 0);
+    }
+
+    overlay.addEventListener("pointerdown", function (evt) {
+      overlay.setPointerCapture(evt.pointerId);
+      brush.active = true; brush.selected = false;
+      brush.startIdx = idxAt(evt); brush.endIdx = brush.startIdx;
+      drawSelection(brush.startIdx, brush.endIdx);
+      tooltip.style.opacity = 0;
+    });
+    overlay.addEventListener("pointermove", function (evt) {
+      if (brush.active) {
+        brush.endIdx = idxAt(evt);
+        drawSelection(brush.startIdx, brush.endIdx);
+        return;
+      }
+      var idx = idxAt(evt);
+      var rect = svg.getBoundingClientRect();
+      var x = xScale(idx,n); crosshair.setAttribute("x1",x); crosshair.setAttribute("x2",x); crosshair.style.opacity = 1;
+      tooltip.innerHTML = "";
+      var head = document.createElement("div"); head.className="t-time"; head.textContent = timeLabel(n-1-idx, stepMin); tooltip.appendChild(head);
+      for (var ci=CATS2.length-1; ci>=0; ci--) {
+        var row = document.createElement("div"); row.className="t-row";
+        var kw = document.createElement("span"); kw.className="t-key";
+        var st = document.createElement("span"); st.className="stroke"; st.style.background = cssColor(CATS2[ci].css); kw.appendChild(st);
+        var nm = document.createElement("span"); nm.textContent = CATS2[ci].label; kw.appendChild(nm); row.appendChild(kw);
+        var val = document.createElement("span"); val.className="t-val"; val.textContent = data[idx].values[ci].toFixed(2); row.appendChild(val);
+        tooltip.appendChild(row);
+      }
+      var tr = document.createElement("div"); tr.className="t-total";
+      var tl = document.createElement("span"); tl.textContent = "합계 AAS"; var tv = document.createElement("span"); tv.className="t-val"; tv.textContent = totals[idx].toFixed(2);
+      tr.appendChild(tl); tr.appendChild(tv); tooltip.appendChild(tr);
+      var left = (x/W)*rect.width;
+      tooltip.style.left = Math.min(rect.width-190, Math.max(0,left+12))+"px"; tooltip.style.top = "6px"; tooltip.style.opacity = 1;
+    });
+    function finishBrush() {
+      if (!brush.active) return;
+      brush.active = false;
+      var lo = Math.min(brush.startIdx, brush.endIdx), hi = Math.max(brush.startIdx, brush.endIdx);
+      if (hi - lo < 1) { brush.selected = false; hideSelection(); clearSessionPanel(); return; }
+      brush.selected = true; brush.startIdx = lo; brush.endIdx = hi;
+      drawSelection(lo, hi);
+      updateSessionPanel(lo, hi);
+    }
+    overlay.addEventListener("pointerup", finishBrush);
+    overlay.addEventListener("pointercancel", finishBrush);
+    overlay.addEventListener("pointerleave", function () { if (!brush.active) { crosshair.style.opacity = 0; tooltip.style.opacity = 0; } });
+
+    // re-apply existing selection visual (e.g. after range/texture change) if one exists and still valid
+    if (brush.selected && brush.endIdx < n) { drawSelection(brush.startIdx, brush.endIdx); } else { brush.selected = false; hideSelection(); }
+
+    buildLegend(document.getElementById("legend2"), CATS2, { onOtherClick: toggleOtherDrill });
+    if (otherDrillOpen) renderOtherDrill();
+
+    // table view (accessibility relief for contrast WARN)
+    var tableHead2 = document.getElementById("tableHead2"), tableBody2 = document.getElementById("tableBody2");
+    tableHead2.innerHTML = "";
+    var thTime = document.createElement("th"); thTime.textContent = "시간"; tableHead2.appendChild(thTime);
+    CATS2.forEach(function (c) { var th = document.createElement("th"); th.className="tabular"; th.textContent = c.label; tableHead2.appendChild(th); });
+    var thTotal = document.createElement("th"); thTotal.className="tabular"; thTotal.textContent = "합계"; tableHead2.appendChild(thTotal);
+    tableBody2.innerHTML = "";
+    var stride = Math.max(1, Math.floor(n/20));
+    for (var ti=n-1; ti>=0; ti-=stride) {
+      var tr2 = document.createElement("tr");
+      var tdT = document.createElement("td"); tdT.textContent = timeLabel(n-1-ti, stepMin); tr2.appendChild(tdT);
+      CATS2.forEach(function (c, ci2) { var td = document.createElement("td"); td.className="tabular"; td.textContent = data[ti].values[ci2].toFixed(2); tr2.appendChild(td); });
+      var tdTot = document.createElement("td"); tdTot.className="tabular total"; tdTot.textContent = totals[ti].toFixed(2); tr2.appendChild(tdTot);
+      tableBody2.appendChild(tr2);
+    }
+  }
+
+  // ---------------- Session detail panel (driven by drag selection) ----------------
+  var sessRand = mulberry32(555111);
+  function pick(arr) { return arr[Math.floor(sessRand()*arr.length)]; }
+  function genSessionRows(lo, hi) {
+    var data = chart2.data, stepMin = chart2.stepMin, n = chart2.n;
+    var shareSum = new Array(CATS2.length).fill(0), total = 0;
+    for (var i=lo;i<=hi;i++) { for (var c=0;c<CATS2.length;c++) { shareSum[c]+=data[i].values[c]; total+=data[i].values[c]; } }
+    var rows = [];
+    var budget = 9;
+    var order = CATS2.map(function(c,idx){return idx;}).filter(function(idx){return idx !== CATS2.length-1;}); // exclude "Other" template rows
+    order.sort(function(a,b){ return shareSum[b]-shareSum[a]; });
+    order.forEach(function (ci) {
+      if (budget <= 0) return;
+      var share = total > 0 ? shareSum[ci]/total : 0;
+      var count = Math.min(budget, Math.round(share*9));
+      if (count < 1 && share > 0.05) count = 1;
+      budget -= count;
+      var cat = CATS2[ci];
+      for (var r=0;r<count;r++) {
+        rows.push({
+          sid: 100 + Math.floor(sessRand()*800),
+          serial: 10000 + Math.floor(sessRand()*89999),
+          sqlId: cat.label,
+          text: cat.text,
+          module: cat.module,
+          wait: pick(cat.waits),
+          elapsed: Math.round((2 + sessRand()*40) * (0.6 + share*2)),
+          color: cssColor(cat.css)
+        });
+      }
+    });
+    rows.sort(function (a,b) { return b.elapsed - a.elapsed; });
+    return { rows: rows, shareSum: shareSum, total: total };
+  }
+
+  function clearSessionPanel() {
+    document.getElementById("selSummary").classList.remove("show");
+    document.getElementById("sessionTableWrap").classList.remove("show");
+    if (otherDrillOpen) renderOtherDrill();
+  }
+
+  // ---------------- "Other" drill-down: rank the SQLs bundled inside Other ----------------
+  // Other is a long tail of low-activity SQL_IDs that don't crack the Top 5. This expands
+  // it into its own ranked breakdown (Pareto-shaped: a few mid-size contributors, then a
+  // long tail) scoped to the current drag selection, or the whole visible range otherwise.
+  var otherRand = mulberry32(998877);
+  var HASH_CHARS = "0123456789abcdefghijklmnopqrstuvwxyz";
+  function genSqlHash() {
+    var s = ""; for (var i=0;i<8;i++) s += HASH_CHARS[Math.floor(otherRand()*HASH_CHARS.length)];
+    return s;
+  }
+  function genOtherBreakdown(totalValue) {
+    var totalN = 24, shownN = 10; // model a longer tail, but only display the top 10
+    var raws = []; for (var i=0;i<totalN;i++) raws.push(1/Math.pow(i+1,1.3));
+    var sum = raws.reduce(function (a,b) { return a+b; }, 0);
+    var all = raws.map(function (r, i) {
+      var share = r/sum;
+      var cat = CATS1[Math.floor(otherRand()*6)]; // one of the 6 named wait classes (excludes Other-of-Other)
+      return { rank:i+1, id:"SQL-"+genSqlHash(), value:totalValue*share, share:share, catLabel:cat.label, color:cssColor(cat.css) };
+    });
+    var shown = all.slice(0, shownN);
+    var tailCount = all.length - shown.length;
+    var tailSum = all.slice(shownN).reduce(function (a,b) { return a + b.value; }, 0);
+    return { rows: shown, tailCount: tailCount, tailSum: tailSum };
+  }
+  function toggleOtherDrill() {
+    otherDrillOpen = !otherDrillOpen;
+    var wrap = document.getElementById("otherDrillWrap");
+    if (otherDrillOpen) { renderOtherDrill(); wrap.classList.add("show"); }
+    else { wrap.classList.remove("show"); }
+  }
+  function renderOtherDrill() {
+    if (!chart2.data) return;
+    var othIdx = CATS2.length - 1;
+    var lo, hi, scopeLbl, totalOther = 0;
+    if (brush.selected) {
+      lo = brush.startIdx; hi = brush.endIdx;
+      for (var i=lo;i<=hi;i++) totalOther += chart2.data[i].values[othIdx];
+      scopeLbl = "선택 구간 " + timeLabel(chart2.n-1-hi, chart2.stepMin) + " ~ " + timeLabel(chart2.n-1-lo, chart2.stepMin);
+    } else {
+      for (var j=0;j<chart2.n;j++) totalOther += chart2.data[j].values[othIdx];
+      scopeLbl = "전체 표시 구간 (" + timeLabel(chart2.n-1, chart2.stepMin) + " ~ 지금)";
+    }
+    document.getElementById("otherDrillScope").textContent = scopeLbl + " · Other 합계 AAS " + totalOther.toFixed(2);
+
+    var breakdown = genOtherBreakdown(totalOther);
+    var rows = breakdown.rows;
+    var listEl = document.getElementById("otherDrillList");
+    listEl.innerHTML = "";
+    var maxVal = rows.length ? rows[0].value : 1;
+    rows.forEach(function (r) {
+      var row = document.createElement("div"); row.className = "other-row";
+      var rank = document.createElement("span"); rank.className = "rank"; rank.textContent = r.rank + "."; row.appendChild(rank);
+      var dot = document.createElement("span"); dot.className = "dot"; dot.style.background = r.color; row.appendChild(dot);
+      var name = document.createElement("span"); name.className = "name"; name.textContent = r.id; row.appendChild(name);
+      var barwrap = document.createElement("span"); barwrap.className = "barwrap";
+      var bar = document.createElement("span"); bar.className = "bar";
+      bar.style.width = Math.max(4, (r.value/maxVal*100)) + "%"; bar.style.background = r.color;
+      barwrap.appendChild(bar); row.appendChild(barwrap);
+      var pct = document.createElement("span"); pct.className = "pct"; pct.textContent = (r.share*100).toFixed(1) + "%"; row.appendChild(pct);
+      var catLbl = document.createElement("span"); catLbl.className = "cat-label"; catLbl.textContent = r.catLabel; row.appendChild(catLbl);
+      listEl.appendChild(row);
+    });
+    document.getElementById("otherDrillNote").textContent = breakdown.tailCount > 0
+      ? ("상위 " + rows.length + "개 SQL 표시 · 이 외 " + breakdown.tailCount + "개 SQL이 약 " + breakdown.tailSum.toFixed(2) + " AAS를 차지 (개별 미표시)")
+      : ("상위 " + rows.length + "개 SQL로 Other 전체를 표시했습니다.");
+  }
+  document.getElementById("otherDrillClose").addEventListener("click", function () {
+    otherDrillOpen = false;
+    document.getElementById("otherDrillWrap").classList.remove("show");
+  });
+
+  function updateSessionPanel(lo, hi) {
+    var stepMin = chart2.stepMin, n = chart2.n;
+    var rangeLbl = timeLabel(n-1-hi, stepMin) + " ~ " + timeLabel(n-1-lo, stepMin);
+    var result = genSessionRows(lo, hi);
+    var span = hi - lo + 1;
+    var avg = result.total / span;
+    var topIdx = 0; for (var c=1;c<CATS2.length;c++) if (result.shareSum[c] > result.shareSum[topIdx]) topIdx = c;
+
+    document.getElementById("selRange").textContent = rangeLbl;
+    document.getElementById("selAvg").textContent = avg.toFixed(2);
+    document.getElementById("selTopSql").textContent = CATS2[topIdx].label + (topIdx===CATS2.length-1 ? "" : " (" + CATS2[topIdx].module + ")");
+    document.getElementById("selSummary").classList.add("show");
+
+    var tbody = document.getElementById("sessionTableBody");
+    tbody.innerHTML = "";
+    result.rows.forEach(function (row) {
+      var tr = document.createElement("tr");
+      var tdSid = document.createElement("td"); tdSid.className="mono"; tdSid.textContent = row.sid; tr.appendChild(tdSid);
+      var tdSer = document.createElement("td"); tdSer.className="mono"; tdSer.textContent = row.serial; tr.appendChild(tdSer);
+      var tdSql = document.createElement("td");
+      var key = document.createElement("span"); key.className="sql-key";
+      var dot = document.createElement("span"); dot.className="dot"; dot.style.background = row.color; key.appendChild(dot);
+      var lab = document.createElement("span"); lab.textContent = row.sqlId; key.appendChild(lab);
+      tdSql.appendChild(key); tr.appendChild(tdSql);
+      var tdText = document.createElement("td"); tdText.className="sqltext"; tdText.textContent = row.text; tr.appendChild(tdText);
+      var tdMod = document.createElement("td"); tdMod.textContent = row.module; tr.appendChild(tdMod);
+      var tdWait = document.createElement("td"); tdWait.textContent = row.wait; tr.appendChild(tdWait);
+      var tdEl = document.createElement("td"); tdEl.className="mono tabular"; tdEl.textContent = row.elapsed; tr.appendChild(tdEl);
+      tbody.appendChild(tr);
+    });
+    document.getElementById("sessionTableWrap").classList.add("show");
+    if (otherDrillOpen) renderOtherDrill();
+  }
+
+  document.getElementById("clearSel").addEventListener("click", function () {
+    brush.selected = false; brush.startIdx = null; brush.endIdx = null;
+    clearSessionPanel();
+    renderChart2();
+  });
+
+  function renderAll() { renderChart1(); renderChart2(); }
+  renderAll();
+
+  document.getElementById("rangeSeg").addEventListener("click", function (e) {
+    var btn = e.target.closest("button"); if (!btn) return;
+    this.querySelectorAll("button").forEach(function (b) { b.classList.remove("active"); });
+    btn.classList.add("active"); state.range = parseInt(btn.dataset.range, 10);
+    brush.selected = false; clearSessionPanel();
+    renderAll();
+  });
+  document.getElementById("textureToggle").addEventListener("change", function (e) { state.texture = e.target.checked; renderChart2(); });
+  document.getElementById("tableToggle").addEventListener("change", function (e) {
+    state.table = e.target.checked;
+    document.getElementById("tableWrap2").classList.toggle("show", state.table);
+  });
+  document.getElementById("themeToggle").addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var next = cur === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    this.textContent = next === "dark" ? "라이트 모드" : "다크 모드";
+    renderAll();
+  });
+})();
+</script>
+</body>
+</html>
