@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DB InsightFlow 대시보드 목업</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  color-scheme:dark;
+  --page:#0b0f14; --surface:#141a21; --surface-2:#1a212a; --sidebar:#0d1218;
+  --ink:#eef2f6; --ink-2:#b3bec9; --muted:#7f8b97;
+  --grid:#222b35; --axis:#35414d; --line:rgba(255,255,255,.10);
+  --sel:rgba(255,255,255,.08); --sel-edge:#b3bec9; --accent:#3a86ff;
+  --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --crit:#d03b3b; --fail:#7f8b97;
+  --wc-0:#1c9a68; --wc-1:#4270e8; --wc-2:#13a9a4; --wc-3:#a45a2c;
+  --wc-4:#ec4868; --wc-5:#a8830a; --wc-6:#8f7ae6; --wc-7:#d46a9e;
+  --sans:"IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--page);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.45;overflow:hidden}
+.mono{font-family:var(--mono)}
+.num{font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+/* ===== 앱 셸 (기존 DB InsightFlow 화면 재현) ===== */
+.shell{display:flex;height:100dvh;width:100%}
+.sidebar{width:172px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px 8px 8px;overflow-y:auto}
+.brand{padding:2px 6px 12px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.brand .name{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;color:#fff}
+.brand .logo{width:19px;height:19px;border-radius:5px;background:linear-gradient(135deg,#22d3ee,#2a78d6);flex:none}
+.brand .org{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--muted);margin:5px 0 0 2px}
+.brand .org i{width:12px;height:12px;border-radius:2px;background:var(--surface-2);flex:none}
+.navgroup{display:flex;flex-direction:column;gap:1px;margin-bottom:6px}
+.grouphd{display:flex;align-items:center;justify-content:space-between;padding:6px 6px;font-size:11.5px;color:var(--ink-2);font-weight:600}
+.grouphd .chev{color:var(--muted);font-size:9px}
+.navitem{display:flex;align-items:center;gap:7px;padding:7px 8px 7px 16px;border-radius:5px;font-size:12px;color:var(--ink-2);position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navitem .dot{width:5px;height:5px;border-radius:50%;background:var(--muted);flex:none}
+.navitem.active{background:var(--surface-2);color:#fff}
+.navitem.active::before{content:"";position:absolute;left:0;top:4px;bottom:4px;width:2px;background:var(--accent);border-radius:2px}
+.navitem.active .dot{background:var(--accent)}
+.sidebar-spacer{flex:1}
+.profile{display:flex;align-items:center;gap:8px;padding:9px 6px 2px;border-top:1px solid var(--line)}
+.profile .av{width:25px;height:25px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink-2);flex:none}
+.profile .who{display:flex;flex-direction:column;line-height:1.25}
+.profile .who b{font-size:12px;font-weight:600;color:#fff}
+.profile .who span{font-size:10.5px;color:var(--muted)}
+
+.mainarea{flex:1;min-width:0;display:flex;flex-direction:column;height:100%}
+.topbar{flex:none;display:flex;align-items:center;justify-content:space-between;padding:9px 18px;border-bottom:1px solid var(--line);gap:12px}
+.crumb{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;min-width:0}
+.crumb .name{font-size:14.5px;font-weight:600;color:#fff;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.crumb .chev{color:var(--muted);font-size:10px}
+.crumb .sub{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.crumb .sub .mono{color:var(--ink-2)}
+.topbar-icons{display:flex;align-items:center;gap:7px;flex:none}
+.topbar-icons .tag{border:1px solid var(--line);border-radius:4px;padding:3px 8px;font-size:10.5px;color:var(--muted);font-weight:600}
+.topbar-icons .dot-ic{width:7px;height:7px;border-radius:50%;background:var(--good)}
+
+.tabs{flex:none;display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs .tab{padding:8px 11px;font-size:12px;color:var(--ink-2);white-space:nowrap;border-bottom:2px solid transparent}
+.tabs .tab.active{color:#fff;border-color:var(--accent);font-weight:600}
+
+.statusbar{flex:none;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 18px;padding:8px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.statusbar-left{display:flex;flex-wrap:wrap;align-items:center;gap:16px;font-size:11.5px;color:var(--ink-2)}
+.statusbar-left .stat b{color:#fff;font-weight:600}
+.statusbar-left .livedot{width:6px;height:6px;border-radius:50%;background:var(--good);display:inline-block;margin-right:5px}
+.statusbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.refreshctl{font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+.refreshctl input{width:46px;margin-left:4px;padding:2px 4px;font-size:11.5px;color:var(--ink);background:var(--surface-2);border:1px solid var(--axis);border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.smallbtn{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:6px 10px;font-size:11.5px;color:var(--ink-2);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.stopbtn{background:var(--crit);border:0;border-radius:5px;padding:6px 12px;font-size:11.5px;font-weight:700;color:#fff;cursor:pointer;white-space:nowrap}
+.stopbtn[aria-pressed="true"]{background:var(--surface-2);color:var(--ink-2)}
+
+.dashboard{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding:10px 18px 12px;overflow-x:hidden;overflow-y:auto}
+
+/* ===== 대시보드 8프레임 ===== */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--ink-2);white-space:nowrap}
+.pill i{width:8px;height:8px;display:inline-block;flex:none}
+.pill.good i{background:var(--good);border-radius:50%}
+.pill.warn i{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid var(--warn)}
+.pill.crit i{background:var(--crit)}
+.pill.serious i{background:var(--serious);transform:rotate(45deg);width:7px;height:7px}
+.pill.fail i{background:none;position:relative}
+.pill.fail i::before,.pill.fail i::after{content:"";position:absolute;left:3px;top:-1px;width:2px;height:10px;background:var(--fail);transform:rotate(45deg)}
+.pill.fail i::after{transform:rotate(-45deg)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+
+.rangewrap{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:2px}
+.seg button{border:0;background:none;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:12px;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+
+.kpis{flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.kpi{padding:8px 14px;border-left:1px solid var(--line);display:flex;flex-direction:column;gap:1px;min-width:0}
+.kpi:first-child{border-left:0}
+.kpi .lbl{font-size:11px;color:var(--muted)}
+.kpi .v{font-size:19px;font-weight:600;line-height:1.2}
+.kpi .v small{font-size:12px;font-weight:400;color:var(--ink-2);margin-left:4px}
+.kpi .s{font-size:11px;color:var(--ink-2)}
+
+.duo{flex:1;min-height:180px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.chartcard,.lockcard{padding:10px 12px 8px;overflow-y:auto;display:flex;flex-direction:column;min-height:0}
+.ch-head{flex:none;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px;align-items:baseline}
+.ch-head h2{margin:0;font-size:13px;font-weight:600}
+.ch-head .src{font-size:10.5px;color:var(--muted)}
+.legend{flex:none;display:flex;flex-wrap:wrap;gap:3px 5px;margin:6px 0 2px;padding:0;list-style:none}
+.legend button{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--surface-2);border-radius:4px;padding:2px 6px;font-size:10.5px;cursor:pointer;color:var(--ink)}
+.legend button[aria-pressed="false"]{color:var(--muted);text-decoration:line-through}
+.legend button[aria-pressed="false"] .sw{opacity:.25}
+.sw{width:9px;height:9px;border-radius:2px;display:inline-block;flex:none}
+.plot{position:relative;touch-action:pan-y;user-select:none;-webkit-user-select:none;cursor:crosshair;flex:1;min-height:60px}
+.plot svg{display:block;width:100%;overflow:visible}
+.plot text{font-family:var(--sans);font-size:10.5px;fill:var(--muted)}
+.plot .tick{font-variant-numeric:tabular-nums}
+.gridl{stroke:var(--grid);stroke-width:1}
+.base{stroke:var(--axis);stroke-width:1}
+.area{stroke:var(--surface);stroke-width:1.5;stroke-linejoin:round}
+.corel{stroke:var(--ink-2);stroke-width:1.5;stroke-dasharray:5 4;fill:none}
+.corelbl{fill:var(--ink-2)!important;font-weight:600}
+.selr{fill:var(--sel);stroke:var(--sel-edge);stroke-width:1;stroke-dasharray:3 3}
+.xh{stroke:var(--ink);stroke-width:1}
+.tip{display:grid;grid-template-columns:auto auto;column-gap:14px;position:absolute;top:2px;pointer-events:none;background:var(--surface);border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.5);border-radius:6px;padding:7px 9px;min-width:160px;font-size:11.5px;z-index:3}
+.tip .t{grid-column:1/-1;font-weight:600;margin-bottom:3px;display:flex;justify-content:space-between;gap:12px}
+.tip .r{display:grid;grid-template-columns:12px 32px 1fr;align-items:center;gap:5px;line-height:1.45;white-space:nowrap}
+.tip .r b{font-variant-numeric:tabular-nums;text-align:right;font-weight:600}
+.tip .r span:last-child{color:var(--ink-2)}
+.tip .k{width:12px;height:2px;border-radius:1px}
+.tip .tot{grid-column:1/-1;border-top:1px solid var(--line);margin-top:4px;padding-top:4px;display:flex;justify-content:space-between}
+.ch-foot{flex:none;display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:center;margin-top:6px;font-size:10.5px;color:var(--muted)}
+.ch-foot-btns{display:flex;gap:6px;flex:none}
+.linkbtn{background:none;border:1px solid var(--line);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:10.5px;color:var(--ink-2)}
+.tablewrap{overflow-x:auto;max-height:220px;overflow-y:auto;margin-top:8px;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;font-size:11px;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:3px 8px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{position:sticky;top:0;background:var(--surface-2);font-weight:600;color:var(--ink-2)}
+th:first-child,td:first-child{text-align:left}
+tr.over td{background:color-mix(in srgb, var(--crit) 8%, transparent)}
+
+.failbox{padding:20px 16px;text-align:center;color:var(--ink-2)}
+.failbox h3{margin:0 0 6px;color:var(--ink);font-size:14px}
+.failbox code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:2px 6px;border-radius:4px}
+
+#drill{flex:none;display:flex;flex-direction:column;gap:6px}
+.drill-head{flex:none;display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;justify-content:space-between}
+.drill-head h2{margin:0;font-size:13px;font-weight:600}
+.diag{flex:none;padding:7px 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:11.5px;color:var(--ink-2);display:flex;gap:8px;align-items:flex-start}
+.diag .sw{margin-top:5px}
+.diag b{color:var(--ink);font-weight:600}
+.panels{flex:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.panel{padding:9px 11px 6px;display:flex;flex-direction:column}
+.panel h3{flex:none;margin:0 0 1px;font-size:11.5px;font-weight:600}
+.panel .sub{flex:none;font-size:10px;color:var(--muted);margin-bottom:2px}
+.rows{list-style:none;margin:0;padding:0}
+.rows li{padding:6px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
+.rows li:first-child{border-top:0}
+.rtop{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.rtop .id{font-family:var(--mono);font-size:11.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rtop .val{font-variant-numeric:tabular-nums;font-weight:600;font-size:12px;white-space:nowrap}
+.rtop .val small{font-weight:400;color:var(--muted);font-size:10px;margin-left:4px}
+.bar{display:flex;gap:1px;height:7px}
+.bar span{height:100%}
+.bar span:first-child{border-radius:2px 0 0 2px}
+.bar span:last-child{border-radius:0 2px 2px 0}
+.bar span:only-child{border-radius:2px}
+.rtxt{font-family:var(--mono);font-size:10.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rmeta{font-size:11px;color:var(--ink-2);display:flex;gap:8px;flex-wrap:wrap}
+.blk{color:var(--crit);font-weight:500}
+.note{font-size:11px;color:var(--muted);margin:0}
+@media (prefers-reduced-motion:no-preference){.plot svg path.area{transition:opacity .15s}}
+/* Lock 실시간 */
+.lockcard h2{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.live{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;letter-spacing:.05em;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.live i{width:6px;height:6px;border-radius:50%;background:var(--crit)}
+.live.paused i{background:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.live:not(.paused) i{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{50%{opacity:.25}}
+.lkkeys{flex:none;display:flex;flex-wrap:wrap;gap:10px;font-size:10.5px;color:var(--ink-2);margin:6px 0 1px}
+.lkkeys span{display:inline-flex;align-items:center;gap:5px}
+.lkkeys .lk{width:13px;height:2px;border-radius:1px;display:inline-block}
+.lkkeys .lk.th{height:0;border-top:1.5px dashed var(--ink-2);background:none}
+.lkstats{flex:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:6px}
+.lkstats .kpi{padding:6px 10px}
+.lkstats .kpi .v{font-size:18px}
+.kpi .lbl .k2{display:inline-block;width:11px;height:2px;border-radius:1px;vertical-align:middle;margin-right:5px}
+.lkline{fill:none;stroke-width:2;stroke-linejoin:round}
+.lkarea{opacity:.12}
+.thl{stroke:var(--ink-2);stroke-width:1;stroke-dasharray:4 4}
+.endlbl{font-weight:600;fill:var(--ink)!important}
+.lkt td,.lkt th{text-align:left}
+.lkt td.n{text-align:right}
+.lkt .empty{text-align:center;color:var(--ink-2);padding:14px}
+.lklog{flex:none;margin:6px 0 0;font-size:10.5px;color:var(--ink-2);padding:5px 8px;border-left:2px solid var(--good);background:var(--surface-2);border-radius:0 4px 4px 0}
+.lkhint{flex:none;font-size:10.5px;color:var(--muted);margin:6px 0 0}
+/* TM 장애 처리 */
+.lockcard{transition:background-color .3s,border-color .3s}
+.lockcard.incident{border-color:var(--crit);background:color-mix(in srgb, var(--crit) 13%, var(--surface));box-shadow:0 0 0 1px var(--crit),0 0 22px color-mix(in srgb, var(--crit) 30%, transparent)}
+@media (prefers-reduced-motion:no-preference){.lockcard.incident{animation:glow 2s ease-in-out infinite}}
+@keyframes glow{50%{box-shadow:0 0 0 1px var(--crit),0 0 6px color-mix(in srgb, var(--crit) 12%, transparent)}}
+.lockcard.incident .lkstats,.lockcard.incident .lkstats .kpi{border-color:color-mix(in srgb, var(--crit) 45%, transparent)}
+.incbar{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap;margin:6px 0;padding:7px 10px;border-radius:6px;background:var(--crit);color:#fff}
+.inc-msg{display:flex;flex-direction:column;gap:1px;font-size:11.5px}
+.inc-msg b{font-size:12.5px}
+.incbtn{background:#fff;color:#8f1d1d;border:0;border-radius:5px;padding:6px 12px;font-weight:700;font-size:11.5px;cursor:pointer;white-space:nowrap}
+.incbtn:hover{background:#ffe9e9}
+.killpanel{flex:none;margin:6px 0;padding:10px;border:1px solid var(--crit);border-radius:6px;background:var(--surface)}
+.killpanel h3{margin:0 0 4px;font-size:12px}
+.killpanel .sub{font-size:11px;color:var(--ink-2);margin:0 0 6px}
+.killpanel table td,.killpanel table th{text-align:left}
+.killpanel td.n{text-align:right}
+.killpanel .short{color:var(--warn);font-size:10px;margin-left:6px}
+.killpanel pre{font-family:var(--mono);font-size:10.5px;background:var(--surface-2);border-radius:4px;padding:7px 9px;margin:6px 0 0;overflow-x:auto;color:var(--ink-2)}
+.kp-act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
+.killbtn{background:var(--crit);color:#fff;border:0;border-radius:5px;padding:6px 13px;font-weight:700;font-size:12px;cursor:pointer}
+.killbtn:disabled{opacity:.6;cursor:progress}
+.lkcrit{color:var(--muted);margin-left:auto}
+.lkkeys .lk.kl{width:2px;height:11px;background:var(--crit)}
+.incbg{fill:var(--crit);opacity:.14}
+.killmk{stroke:var(--crit);stroke-width:2}
+.killlbl{fill:var(--crit)!important;font-weight:700}
+/* 클릭 가능한 행 + 상세 드로어 */
+.rows li.clk{cursor:pointer;margin:0 -6px;padding:6px;border-radius:5px}
+.rows li.clk+li.clk{border-top:1px solid var(--line)}
+.rows li.clk:hover,.rows li.clk:focus-visible{background:var(--surface-2)}
+.rows li.clk .rtop .val::after{content:"›";margin-left:6px;color:var(--muted);font-weight:400}
+.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(470px,100vw);background:var(--surface);border-left:1px solid var(--line);z-index:21;display:flex;flex-direction:column;box-shadow:-14px 0 36px rgba(0,0,0,.5)}
+@media (prefers-reduced-motion:no-preference){.drawer:not([hidden]){animation:dwIn .18s ease-out}}
+@keyframes dwIn{from{transform:translateX(24px);opacity:0}}
+.dw-head{flex:none;display:flex;align-items:flex-start;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.dw-titles{flex:1;min-width:0}
+.dw-kind{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.05em}
+.dw-head h3{margin:1px 0 2px;font-size:15px;font-weight:600;word-break:break-all}
+.dw-sub{font-size:11.5px;color:var(--ink-2);display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.dw-icon{flex:none;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;width:28px;height:28px;cursor:pointer;color:var(--ink-2);font-size:14px;line-height:1}
+.dw-body{flex:1;min-height:0;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:14px}
+.dw-sec h4{margin:0 0 6px;font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+.kv{display:grid;grid-template-columns:118px minmax(0,1fr);gap:4px 10px;font-size:12px;margin:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;color:var(--ink);word-break:break-all}
+.dw-code{font-family:var(--mono);font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:8px 10px;margin:6px 0 0;white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}
+.dw-q summary{cursor:pointer;font-size:11.5px;color:var(--ink-2)}
+.dw-actline{font-size:12px;color:var(--ink-2);margin-bottom:5px}
+.dw-actline b{color:var(--ink);font-size:15px}
+.dw-bar{height:9px}
+.dw-cls{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:3px;font-size:11.5px}
+.dw-cls li{display:grid;grid-template-columns:10px 1fr auto;gap:6px;align-items:center;color:var(--ink-2)}
+.dw-cls b{font-weight:500;color:var(--ink)}
+.dw-list{list-style:none;margin:0;padding:0}
+.dw-list li{padding:7px 6px;margin:0 -6px;border-radius:5px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.dw-list li:first-child{border-top:0}
+.dw-list li.clk{cursor:pointer}
+.dw-list li.clk:hover,.dw-list li.clk:focus-visible{background:var(--surface-2)}
+.dw-list li.clk .rtop .val::after{content:"›";margin-left:6px;color:var(--muted)}
+.dw-empty{color:var(--muted);font-size:12px}
+.dw-note{margin:0;font-size:12px;color:var(--ink-2)}
+.dw-link{background:none;border:0;padding:0;color:#6ea8ff;font-family:var(--mono);font-size:12px;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.dw-foot{flex:none;display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}
+.dw-act{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:6px 12px;font-size:12px;color:var(--ink);cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dw-act:disabled{opacity:.5;cursor:not-allowed}
+/* 점검 알림 */
+.alerts{flex:none;padding:8px 12px 10px}
+.al-head{display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap;margin-bottom:7px}
+.al-head h2{margin:0;font-size:13px;font-weight:600}
+.al-sum{display:inline-flex;gap:10px}
+.al-meta{font-size:10.5px;color:var(--muted);flex:1}
+.al-filter button{padding:2px 9px;font-size:11px}
+.pill.info i{width:8px;height:8px;border-radius:50%;background:none;box-shadow:inset 0 0 0 1.5px var(--ink-2)}
+.al-list{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(200px,1fr);gap:8px;overflow-x:auto;padding-bottom:2px}
+.al-card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--line);border-left:3px solid var(--muted);border-radius:6px;background:var(--surface-2);cursor:pointer;min-width:0}
+.al-card.crit{border-left-color:var(--crit);background:color-mix(in srgb, var(--crit) 9%, var(--surface-2))}
+.al-card.warn{border-left-color:var(--warn)}
+.al-card:hover{border-color:color-mix(in srgb, var(--ink) 30%, transparent)}
+.al-card:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.al-r1{display:flex;align-items:center;gap:8px;min-width:0}
+.al-r1 .pill{font-size:11px}
+.al-cat{font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-r2{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.al-name{font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-val{font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap}
+.al-meter{position:relative;height:5px;border-radius:3px;background:var(--grid)}
+.al-fill{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.al-fill.crit{background:var(--crit)}.al-fill.warn{background:var(--warn)}
+.al-th{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink);border-radius:1px;transform:translateX(-1px)}
+.al-detail{font-size:10.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.al-spkwrap svg{display:block;width:100%;height:auto}
+.al-spkwrap text{font-family:var(--sans);font-size:10.5px;fill:var(--muted)}
+.al-spk{fill:none;stroke-width:2;stroke-linejoin:round}
+.al-spk.crit{stroke:var(--crit)}.al-spk.warn{stroke:var(--warn)}.al-spk.info{stroke:var(--ink-2)}
+.al-dot{stroke:var(--surface);stroke-width:2}
+.al-dot.crit{fill:var(--crit)}.al-dot.warn{fill:var(--warn)}.al-dot.info{fill:var(--ink-2)}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="name"><span class="logo"></span>DB InsightFlow</div>
+      <div class="org"><i></i>한국특허정보원</div>
+    </div>
+    <div class="navgroup">
+      <div class="grouphd">특허넷 통합DB<span class="chev">▾</span></div>
+      <div class="navitem active"><span class="dot"></span>통합DB #1 (ORCL1)</div>
+      <div class="navitem"><span class="dot"></span>통합DB #2 (ORCL2)</div>
+    </div>
+    <div class="navgroup"><div class="grouphd">TEST<span class="chev">▸</span></div></div>
+    <div class="navgroup"><div class="grouphd">검색DB<span class="chev">▸</span></div></div>
+    <div class="sidebar-spacer"></div>
+    <div class="profile"><span class="av">A</span><span class="who"><b>admin</b><span>Database Admin</span></span></div>
+  </aside>
+
+  <div class="mainarea">
+    <div class="topbar">
+      <div class="crumb">
+        <span class="name">통합DB #1 (ORCL1)<span class="chev">▾</span></span>
+        <span class="sub"><span class="mono" id="dbTitle">PRODDB01</span><span id="dbPill"></span><span id="dbMeta"></span></span>
+      </div>
+      <div class="topbar-icons">
+        <span class="tag">RDB</span><span class="tag">FO</span><span class="dot-ic"></span>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <span class="tab active">DASHBOARD</span>
+      <span class="tab">Current Session</span>
+      <span class="tab">성능 이력 조회</span>
+      <span class="tab">Lock Holder/Waiter Tree</span>
+      <span class="tab">테이블 스페이스 조회</span>
+      <span class="tab">Table Parent/Child 관계</span>
+      <span class="tab">SQL 실행</span>
+      <span class="tab">AI DBA</span>
+      <span class="tab">SQL 정합성/튜닝</span>
+    </nav>
+
+    <div class="statusbar">
+      <div class="statusbar-left">
+        <span class="stat"><i class="livedot"></i>인스턴스 <b>Alive</b></span>
+        <span class="stat"><i class="livedot"></i>리스너 <b>Alive</b></span>
+        <span class="stat">Max Session <b>502</b> EA [Active <b>2</b> EA / Inactive <b>15</b> EA]</span>
+        <span class="stat">Max Process <b>320</b> EA [Dedicate <b>17</b> EA / Dispatcher <b>0</b> EA]</span>
+      </div>
+      <div class="statusbar-right">
+        <div class="rangewrap">
+          <div class="seg" role="group" aria-label="조회 범위" id="rangeSeg">
+            <button type="button" data-r="15" aria-pressed="false">15분</button>
+            <button type="button" data-r="60" aria-pressed="true">1시간</button>
+            <button type="button" data-r="180" aria-pressed="false">3시간</button>
+            <button type="button" data-r="1440" aria-pressed="false">24시간</button>
+          </div>
+        </div>
+        <label class="refreshctl">리프레쉬 주기(초): <input type="number" id="refreshSec" class="mono" min="2" max="60" step="1" value="3" aria-describedby="refreshHint"><span id="refreshHint" class="sr-only">2초에서 60초 사이로 입력하세요</span></label>
+        <button type="button" class="smallbtn" id="manualRefresh">↻ 수동 새로고침</button>
+        <button type="button" class="stopbtn" id="lkPause" aria-pressed="false">자동 갱신 중지</button>
+      </div>
+    </div>
+
+    <div class="dashboard">
+      <section class="card kpis" id="kpis" aria-label="요약"></section>
+
+      <div class="duo">
+        <section class="card chartcard" id="chartCard">
+          <div class="ch-head">
+            <h2>평균 활성 세션 (대기 클래스별)</h2>
+            <span class="src mono" id="aasSrc">Oracle 대기 클래스 기준 · v$active_session_history · 1분 평균</span>
+          </div>
+          <ul class="legend" id="legend"></ul>
+          <div class="plot" id="plot" tabindex="0" aria-label="평균 활성 세션 누적 영역 차트. 좌우 화살표로 시각 이동, Enter로 5분 구간 선택">
+            <svg id="svg" role="img" aria-label="대기 클래스별 평균 활성 세션 추이"></svg>
+            <div class="tip" id="tip" hidden></div>
+          </div>
+          <div class="ch-foot">
+            <span>클릭하면 5분, 드래그하면 원하는 구간이 선택됩니다.</span>
+            <span class="ch-foot-btns">
+              <button type="button" class="linkbtn" id="clearSelBtn" hidden>선택 해제</button>
+              <button type="button" class="linkbtn" id="tblBtn" aria-expanded="false">표로 보기</button>
+            </span>
+          </div>
+          <div class="tablewrap" id="tblWrap" hidden></div>
+        </section>
+        <section class="card lockcard" id="lockCard" aria-label="Lock 대기 실시간">
+          <div class="ch-head">
+            <h2>Lock 대기 세션 <span class="live" id="lkLive"><i></i>LIVE · 3초 주기</span></h2>
+            <span class="src mono" id="lkSrc">v$session · v$lock · 3초</span>
+          </div>
+          <div class="incbar" id="incBar" role="alert" hidden>
+            <div class="inc-msg"><b>TM Lock 장애 감지</b><span id="incTxt"></span></div>
+            <button type="button" class="incbtn" id="incBtn">장애 처리</button>
+          </div>
+          <div class="killpanel" id="killPanel" hidden></div>
+          <div class="lkstats" id="lkStats"></div>
+          <div class="lkkeys">
+            <span><i class="lk" style="background:var(--wc-4)"></i>TX 행 잠금</span>
+            <span><i class="lk" style="background:var(--wc-6)"></i>TM 테이블 잠금</span>
+            <span><i class="lk th"></i>경고 5건</span>
+            <span><i class="lk kl"></i>장애 처리(KILL)</span>
+            <span class="lkcrit">장애 기준: last_call_et 60초↑ TM Holder 6개↑</span>
+          </div>
+          <div class="plot" id="lkPlot" tabindex="0" aria-label="TX, TM Lock 대기 세션 수 실시간 차트. 좌우 화살표로 시각 이동">
+            <svg id="lkSvg" role="img" aria-label="최근 10분 TX, TM Lock 대기 세션 수"></svg>
+            <div class="tip" id="lkTip" hidden></div>
+          </div>
+          <p class="lklog" id="lkLog" hidden></p>
+          
+        </section>
+      </div>
+
+      <section id="drill" aria-live="polite">
+        <div class="drill-head">
+          <h2 id="drillTitle">선택 구간 상세</h2>
+          <span class="note">Top SQL · Top 세션 · Top 대기 이벤트 · 샘플 데이터 목업</span>
+        </div>
+        <div class="diag" id="diag"></div>
+        <div class="panels">
+          <div class="card panel"><h3>Top SQL</h3><div class="sub">구간 내 활동량 순 · 클릭하면 상세</div><ul class="rows" id="topSql"></ul></div>
+          <div class="card panel"><h3>Top 세션</h3><div class="sub">SID · 사용자 · 프로그램 · 클릭하면 상세</div><ul class="rows" id="topSess"></ul></div>
+          <div class="card panel"><h3>Top 대기 이벤트</h3><div class="sub">이벤트별 평균 활성 세션 · 클릭하면 대기 세션</div><ul class="rows" id="topEvt"></ul></div>
+        </div>
+      </section>
+
+      <section class="card alerts" id="alerts" aria-label="점검 알림">
+        <div class="al-head">
+          <h2>점검 알림</h2>
+          <span class="al-sum" id="alSum"></span>
+          <span class="al-meta">마지막 점검 14:25 · 10분 주기 · 클릭하면 상세와 조치</span>
+          <div class="seg al-filter" role="group" aria-label="알림 필터" id="alFilter">
+            <button type="button" data-f="all" aria-pressed="true">전체</button>
+            <button type="button" data-f="crit" aria-pressed="false">위험</button>
+            <button type="button" data-f="warn" aria-pressed="false">주의</button>
+            <button type="button" data-f="info" aria-pressed="false">확인</button>
+          </div>
+        </div>
+        <div class="al-list" id="alList"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+<div class="drawer-bg" id="drawerBg" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="dwTitle" hidden>
+  <div class="dw-head">
+    <button type="button" class="dw-icon" id="dwBack" aria-label="이전 화면" hidden>‹</button>
+    <div class="dw-titles"><span class="dw-kind" id="dwKind"></span><h3 id="dwTitle" class="mono"></h3><div class="dw-sub" id="dwSub"></div></div>
+    <button type="button" class="dw-icon" id="dwClose" aria-label="닫기">✕</button>
+  </div>
+  <div class="dw-body" id="dwBody"></div>
+  <div class="dw-foot" id="dwFoot" hidden></div>
+</aside>
+
+<script>
+(function(){
+const CLS=[
+ {n:'CPU',       hint:'CPU 사용이 대부분입니다. 논리 읽기(buffer gets)가 많은 SQL의 실행계획부터 확인하세요.'},
+ {n:'User I/O',  hint:'디스크 읽기 대기입니다. Full Scan, 인덱스 누락, 대량 배치 SQL을 확인하세요.'},
+ {n:'System I/O',hint:'LGWR·DBWR 같은 백그라운드 쓰기 대기입니다. 스토리지 쓰기 지연을 확인하세요.'},
+ {n:'Concurrency',hint:'같은 블록이나 라이브러리 캐시에 대한 경합입니다. 핫 블록과 하드 파싱을 확인하세요.'},
+ {n:'Application',hint:'행 잠금(enq: TX) 대기입니다. 블로킹 세션과 커밋되지 않은 트랜잭션을 확인하세요.'},
+ {n:'Commit',    hint:'log file sync 대기입니다. 커밋 빈도와 redo 로그 디스크 쓰기 속도를 확인하세요.'},
+ {n:'Network',   hint:'SQL*Net 대기입니다. 대량 fetch나 클라이언트·네트워크 지연을 확인하세요.'},
+ {n:'Other',     hint:'Configuration, Cluster, Scheduler 등 기타 대기의 합입니다.'}
+];
+const NC=CLS.length, N=1440, OFFSET=N-180, START=(((11*60+31)-OFFSET)%1440+1440)%1440; // 24시간 이력, 최근 3시간은 기존과 동일한 값
+const col=i=>`var(--wc-${i})`;
+const hm=i=>{const m=((START+i)%1440+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+function dayFactor(i){const m=((START+i)%1440+1440)%1440,h=m/60;return .35+.65*Math.max(0,Math.cos((h-13)*Math.PI/12))}
+
+const DBS=[
+ {id:'PRODDB01',ver:'Oracle 19c (19.21)',host:'prd-db01',cores:16,seed:7,
+  base:[6,2.4,.45,.35,.12,.55,.25,.3],
+  inc:[[0,39,69,4,6],[1,127,133,4.5,2],[4,141,152,12,2],[3,141,152,1.2,2],[0,141,152,1.5,2],[5,164,168,3.5,1],[2,164,168,1.2,1]]},
+ {id:'ERPDB',ver:'Oracle 19c (19.18)',host:'erp-db01',cores:8,seed:11,
+  base:[3.2,1.1,.3,.2,.05,.3,.1,.15],
+  inc:[[1,60,80,2.5,5],[0,150,179,6.5,5],[3,150,179,.8,5]]},
+ {id:'DWDB',ver:'Oracle 19c (19.21)',host:'dw-db01',cores:32,seed:3,
+  base:[8,9,1.2,.4,.02,.2,.6,.4],
+  inc:[[1,40,90,10,8],[0,40,90,3,8],[2,40,90,1.5,8]]},
+ {id:'CRMDB',ver:'Oracle 12c (12.2.0.1)',host:'crm-db01',cores:8,seed:5,
+  base:[1.4,.6,.15,.08,.03,.2,.05,.08],inc:[[5,100,104,1.2,1]]},
+ {id:'BILLDB',ver:'Oracle 19c (19.20)',host:'bill-db01',cores:12,
+  fail:{err:'ORA-12170: TNS:Connect timeout occurred',last:'14:12'}}
+];
+
+const SQLS=[
+ {id:'9babjv8yq8ru3',txt:'UPDATE orders SET status = :1, upd_dt = SYSDATE WHERE order_id = :2',w:[.6,.3,0,.8,5,1.2,0,.2]},
+ {id:'7h35uxf5uhmm1',txt:'SELECT o.order_id, c.cust_nm, o.amount FROM orders o JOIN customers c ON c.cust_id = o.cust_id WHERE …',w:[3,1,0,.3,0,0,1.5,.1]},
+ {id:'0w2qpuc6u2zsp',txt:'SELECT * FROM sales_hist WHERE sale_dt BETWEEN :1 AND :2',w:[1,3.5,0,.1,0,0,.4,.1]},
+ {id:'g4y6nw3tq7upp',txt:'BEGIN pkg_batch.settle_daily(:1); END;',w:[1.6,1.8,0,.2,.1,.5,0,.3]},
+ {id:'fnf2g7mj4xk3a',txt:'INSERT INTO order_log (log_id, order_id, msg) VALUES (seq_log.NEXTVAL, :1, :2)',w:[.4,.1,0,1.2,0,2.5,0,.6]},
+ {id:'3kqrku32p6sfn',txt:'SELECT NVL(SUM(amount), 0) FROM payments WHERE cust_id = :1',w:[1.4,.5,0,.1,0,0,.2,0]},
+ {id:'5mxdwfuxgfv1q',txt:'SELECT seq_order.NEXTVAL FROM dual',w:[.3,0,0,.9,0,0,.1,.8]}
+];
+const SQL_U=[1,1,1,.5,.2,.6,.5,1];
+const SESS=[
+ {sid:'1043',u:'APP_USER',p:'JDBC Thin Client',w:[1.2,.6,0,.4,3,.6,.3,.1]},
+ {sid:'877', u:'APP_USER',p:'JDBC Thin Client',w:[1.1,.5,0,.4,2.6,.5,.3,.1]},
+ {sid:'1502',u:'APP_USER',p:'JDBC Thin Client',w:[1,.5,0,.3,2.2,.5,.3,.1]},
+ {sid:'312', u:'BATCH',   p:'sqlplus@batch01',w:[1.8,3,0,.2,0,.6,0,.3]},
+ {sid:'2',   u:'SYS',     p:'oracle@{h} (LGWR)',w:[0,0,3,0,0,0,0,.2]},
+ {sid:'3',   u:'SYS',     p:'oracle@{h} (DBW0)',w:[.1,0,2,0,0,0,0,.1]},
+ {sid:'655', u:'RPT_USER',p:'Toad.exe',w:[1.5,1.6,0,.1,0,0,1,.1]},
+ {sid:'1190',u:'APP_USER',p:'w3wp.exe',w:[1.3,.3,0,.6,.3,1.5,.2,.2]}
+];
+const SESS_U=[2,1,.3,.6,.3,.8,.5,1];
+const EVTS=[
+ [['CPU + CPU 대기',1]],
+ [['db file sequential read',.55],['db file scattered read',.25],['direct path read',.2]],
+ [['log file parallel write',.6],['db file parallel write',.3],['control file sequential read',.1]],
+ [['buffer busy waits',.5],['library cache: mutex X',.3],['latch: cache buffers chains',.2]],
+ [['enq: TX - row lock contention',.93],['enq: TM - contention',.07]],
+ [['log file sync',1]],
+ [['SQL*Net more data to client',.7],['SQL*Net message to client',.3]],
+ [['enq: SQ - contention',.4],['reliable message',.3],['LGWR wait for redo copy',.3]]
+];
+
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function plateau(i,s,e,r){if(i<s-r||i>e+r)return 0;if(i<s)return (i-(s-r))/r;if(i>e)return ((e+r)-i)/r;return 1}
+function gen(db){
+  const R=rng(db.seed),d=[];
+  for(let i=0;i<N;i++){
+    const df=dayFactor(i);
+    const row=db.base.map((b,c)=>b*(1+(R()-.5)*.36)*df*(c===0?1+.12*Math.sin(i/9):1));
+    db.inc.forEach(([c,s,e,a,r])=>{row[c]+=a*plateau(i,s+OFFSET,e+OFFSET,r)*(.85+R()*.3)});
+    d.push(row.map(v=>Math.max(0,+v.toFixed(2))));
+  }
+  return d;
+}
+DBS.forEach(db=>{if(!db.fail)db.data=gen(db)});
+
+const st={db:DBS[0],range:60,hidden:new Set(),sel:null,hover:null,userSel:false};
+const $=id=>document.getElementById(id);
+const el=(t,cls,txt)=>{const e=document.createElement(t);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+const f1=v=>v.toFixed(1);
+const sum=a=>a.reduce((x,y)=>x+y,0);
+
+function statusOf(db){
+  if(db.fail)return{c:'fail',t:'수집 실패'};
+  const last=db.data.slice(-10).map(sum),r=sum(last)/last.length/db.cores;
+  if(r>=1)return{c:'crit',t:'초과',r};
+  if(r>=.7)return{c:'warn',t:'주의',r};
+  return{c:'good',t:'정상',r};
+}
+function pill(s){const p=el('span','pill '+s.c);p.append(el('i'),document.createTextNode(s.t));return p}
+
+function view(){const i0=N-st.range;return{i0,rows:st.db.data.slice(i0)}}
+const vis=r=>r.reduce((a,v,c)=>a+(st.hidden.has(c)?0:v),0);
+
+function defaultSel(){
+  const {i0}=view(),tot=st.db.data.map(sum),L=Math.min(10,st.range-1);let best=i0,bv=-1;
+  for(let s=i0;s+L<N;s++){const v=sum(tot.slice(s,s+L+1));if(v>bv){bv=v;best=s}}
+  return[best,best+L];
+}
+
+function renderHead(){
+  const db=st.db;$('dbTitle').textContent=db.id;
+  const p=$('dbPill');p.replaceWith(Object.assign(pill(statusOf(db)),{id:'dbPill'}));
+  $('dbMeta').textContent=`· ${db.ver} · ${db.host} · CPU ${db.cores}코어`;
+  document.querySelectorAll('#rangeSeg button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.r===st.range?'true':'false'));
+  $('aasSrc').textContent='Oracle 대기 클래스 기준 · v$active_session_history · 60초 수집 · 1분 평균';
+}
+
+function renderKpis(){
+  const k=$('kpis');k.textContent='';
+  const add=(lbl,v,unit,s,sp)=>{const d=el('div','kpi');d.append(el('span','lbl',lbl));const vv=el('span','v num',v);if(unit)vv.append(el('small',null,unit));d.append(vv);const ss=el('span','s');if(sp)ss.append(sp);else ss.textContent=s;d.append(ss);k.append(d)};
+  if(st.db.fail){add('현재 AAS','—','', '수집 실패');add('구간 평균','—','','');add('최대 AAS','—','','');add('CPU 코어 초과','—','','');return}
+  const {i0,rows}=view(),tot=rows.map(sum),cores=st.db.cores;
+  const mx=Math.max(...tot),mi=tot.indexOf(mx),over=tot.filter(v=>v>cores).length;
+  const now=tot[tot.length-1];
+  add('현재 AAS',f1(now),'',`${hm(N-1)} · 부하율 ${(now/cores).toFixed(2)}`);
+  add('구간 평균 AAS',f1(sum(tot)/tot.length),'',`최근 ${st.range>=60?st.range/60+'시간':st.range+'분'}`);
+  add('최대 AAS',f1(mx),'',`${hm(i0+mi)} · 코어의 ${Math.round(mx/cores*100)}%`);
+  add('CPU 코어 초과',String(over),'분',null,pill(over?{c:over>=10?'crit':'serious',t:`코어 ${cores}개를 넘은 시간`}:{c:'good',t:'코어 이내 유지'}));
+}
+
+function renderLegend(){
+  const ul=$('legend');ul.textContent='';
+  CLS.forEach((c,i)=>{const li=el('li'),b=el('button');b.type='button';
+    b.setAttribute('aria-pressed',st.hidden.has(i)?'false':'true');
+    const sw=el('span','sw');sw.style.background=col(i);b.append(sw,document.createTextNode(c.n));
+    b.onclick=()=>{st.hidden.has(i)?st.hidden.delete(i):st.hidden.add(i);if(st.hidden.size===NC)st.hidden.delete(i);renderLegend();renderChart();renderTable()};
+    li.append(b);ul.append(li)});
+}
+
+let G=null;
+function nice(max){const raw=max/5,p=Math.pow(10,Math.floor(Math.log10(raw)));const step=[1,2,2.5,5,10].map(m=>m*p).find(s=>s>=raw);return{step,top:Math.ceil(max/step)*step}}
+
+function renderChart(){
+  const card=$('chartCard'),svg=$('svg'),plot=$('plot');
+  let fb=card.querySelector('.failbox');
+  if(st.db.fail){
+    plot.hidden=true;$('legend').hidden=true;card.querySelector('.ch-foot').hidden=true;$('tblWrap').hidden=true;
+    if(!fb){fb=el('div','failbox');card.append(fb)}
+    fb.textContent='';fb.append(el('h3',null,'이 DB에서 데이터를 가져오지 못하고 있습니다'));
+    const p=el('p');p.append(document.createTextNode(`${st.db.fail.last} 이후 접속에 실패했습니다. `),el('code',null,st.db.fail.err));fb.append(p);
+    fb.append(el('p',null,`방화벽(수집 서버 → ${st.db.host}:1521) 정책과 리스너 상태를 확인하세요.`));
+    return;
+  }
+  if(fb)fb.remove();plot.hidden=false;$('legend').hidden=false;card.querySelector('.ch-foot').hidden=false;
+
+  const W=Math.max(260,plot.clientWidth),H=Math.max(60,plot.clientHeight),ml=34,mr=W<520?12:66,mt=12,mb=20;
+  const pw=W-ml-mr,ph=H-mt-mb;
+  const {i0,rows}=view(),n=rows.length,cores=st.db.cores;
+  const tot=rows.map(vis),{step,top}=nice(Math.max(...tot,cores)*1.08);
+  const x=i=>ml+(i/(n-1))*pw,y=v=>mt+ph-(v/top)*ph;
+  G={W,H,ml,mr,mt,mb,pw,ph,n,i0,x,y,top};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('height',H);
+  let s='';
+  for(let v=0;v<=top+1e-9;v+=step){const yy=y(v).toFixed(1);s+=`<line class="${v===0?'base':'gridl'}" x1="${ml}" x2="${ml+pw}" y1="${yy}" y2="${yy}"/><text class="tick" x="${ml-6}" y="${+yy+3.5}" text-anchor="end">${+v.toFixed(2)}</text>`}
+  const every=n<=16?5:n<=61?10:n<=180?30:n<=480?60:120;
+  for(let i=0;i<n;i++){const m=START+i0+i;if(m%every===0){s+=`<text class="tick" x="${x(i).toFixed(1)}" y="${H-6}" text-anchor="middle">${hm(i0+i)}</text>`}}
+  // 누적 영역 (아래 CPU부터)
+  const acc=new Array(n).fill(0);
+  for(let c=0;c<NC;c++){
+    if(st.hidden.has(c))continue;
+    const lo=acc.slice(),hi=acc.map((a,i)=>a+rows[i][c]);
+    let d='M'+hi.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('L');
+    for(let i=n-1;i>=0;i--)d+=`L${x(i).toFixed(1)},${y(lo[i]).toFixed(1)}`;
+    s+=`<path class="area" d="${d}Z" style="fill:${col(c)}"/>`;
+    for(let i=0;i<n;i++)acc[i]=hi[i];
+  }
+  // CPU 코어 기준선
+  const cy=y(cores).toFixed(1);
+  s+=`<line class="corel" x1="${ml}" x2="${ml+pw}" y1="${cy}" y2="${cy}"/>`;
+  s+= mr>36?`<text class="corelbl" x="${ml+pw+6}" y="${+cy-2}">CPU 코어</text><text class="corelbl" x="${ml+pw+6}" y="${+cy+11}">${cores}</text>`
+          :`<text class="corelbl" x="${ml+pw-4}" y="${+cy-5}" text-anchor="end">CPU 코어 ${cores}</text>`;
+  // 선택 구간
+  if(st.sel){const a=Math.max(st.sel[0],i0)-i0,b=Math.min(st.sel[1],N-1)-i0;if(b>=0&&a<=n-1){const xa=x(a),xb=x(b);s+=`<rect class="selr" x="${xa.toFixed(1)}" y="${mt}" width="${Math.max(2,xb-xa).toFixed(1)}" height="${ph}"/>`}}
+  if(st.hover!=null&&st.hover>=i0){const hx=x(st.hover-i0).toFixed(1);s+=`<line class="xh" x1="${hx}" x2="${hx}" y1="${mt}" y2="${mt+ph}"/>`}
+  svg.innerHTML=s;
+}
+
+function showTip(gi){
+  const tip=$('tip');if(gi==null||!G){tip.hidden=true;return}
+  const r=st.db.data[gi];tip.textContent='';
+  const t=el('div','t');t.append(el('span',null,hm(gi)),el('span',null,'AAS'));tip.append(t);
+  for(let c=NC-1;c>=0;c--){if(st.hidden.has(c))continue;const row=el('div','r'),k=el('span','k');k.style.background=col(c);row.append(k,el('b',null,f1(r[c])),el('span',null,CLS[c].n));tip.append(row)}
+  const tv=vis(r),tt=el('div','tot');const l=el('span',null,'합계');const v=el('b','num',`${f1(tv)} · 코어의 ${Math.round(tv/st.db.cores*100)}%`);tt.append(l,v);tip.append(tt);
+  tip.hidden=false;
+  const px=G.x(gi-G.i0),tw=tip.offsetWidth,W=$('plot').clientWidth;
+  tip.style.left=(px+14+tw>W?Math.max(0,px-14-tw):px+14)+'px';
+}
+
+function idxAt(ev){const r=$('svg').getBoundingClientRect(),sx=(ev.clientX-r.left)*(G.W/r.width);const i=Math.round((sx-G.ml)/G.pw*(G.n-1));return G.i0+Math.max(0,Math.min(G.n-1,i))}
+let drag=null;
+const plot=$('plot');
+plot.addEventListener('pointerdown',e=>{if(!G||st.db.fail)return;drag={a:idxAt(e),moved:false};plot.setPointerCapture(e.pointerId)});
+plot.addEventListener('pointermove',e=>{if(!G||st.db.fail)return;const i=idxAt(e);st.hover=i;
+  if(drag&&Math.abs(i-drag.a)>=1){drag.moved=true;st.sel=[Math.min(drag.a,i),Math.max(drag.a,i)];st.userSel=true}
+  renderChart();showTip(i)});
+plot.addEventListener('pointerup',e=>{if(!drag)return;const i=idxAt(e);
+  if(!drag.moved||Math.abs(i-drag.a)<2)selectAround(drag.a);else{st.sel=[Math.min(drag.a,i),Math.max(drag.a,i)];st.userSel=true;renderChart();renderDrill()}
+  drag=null});
+plot.addEventListener('pointerleave',()=>{if(drag)return;st.hover=null;renderChart();showTip(null)});
+plot.addEventListener('keydown',e=>{if(!G)return;const {i0}=view();let h=st.hover??N-1;
+  if(e.key==='ArrowLeft')h=Math.max(i0,h-1);else if(e.key==='ArrowRight')h=Math.min(N-1,h+1);
+  else if(e.key==='Enter'||e.key===' '){selectAround(h);e.preventDefault();return}else return;
+  e.preventDefault();st.hover=h;renderChart();showTip(h)});
+plot.addEventListener('blur',()=>{st.hover=null;renderChart();showTip(null)});
+function selectAround(i){const {i0}=view();let a=Math.max(i0,i-2),b=Math.min(N-1,a+4);a=Math.max(i0,b-4);st.sel=[a,b];st.userSel=true;renderChart();renderDrill()}
+
+function segBar(vec,scale){
+  const bar=el('div','bar'),t=sum(vec);bar.style.width=Math.max(2,t/scale*100)+'%';
+  vec.forEach((v,c)=>{if(v/t<.02)return;const sp=el('span');sp.style.flex=String(v);sp.style.background=col(c);sp.title=`${CLS[c].n} ${f1(v)}`;bar.append(sp)});
+  return bar;
+}
+function attribute(list,U,cls){
+  const den=cls.map((_,c)=>sum(list.map(o=>o.w[c]))+U[c]);
+  return list.map(o=>({o,vec:cls.map((v,c)=>v*o.w[c]/den[c])})).map(r=>({...r,t:sum(r.vec)})).sort((a,b)=>b.t-a.t);
+}
+
+let DR=null;
+function renderDrill(){
+  const ids=['topSql','topSess','topEvt'];ids.forEach(i=>$(i).textContent='');
+  const diag=$('diag');diag.textContent='';
+  if(st.db.fail){$('drillTitle').textContent='선택 구간 상세';$('clearSelBtn').hidden=true;diag.append(el('span',null,'수집된 데이터가 없어 상세를 표시할 수 없습니다.'));return}
+  const [a,b]=st.sel,rows=st.db.data.slice(a,b+1),m=rows.length;
+  const cls=CLS.map((_,c)=>sum(rows.map(r=>r[c]))/m),tot=sum(cls);
+  const tag=st.userSel?'선택 구간':'자동 선택 구간 (구간 내 최대 부하)';
+  $('drillTitle').textContent=`${tag} ${hm(a)} – ${hm(b)} (${m}분) · 평균 AAS ${f1(tot)}`;
+  $('clearSelBtn').hidden=!st.userSel;
+  const dom=cls.indexOf(Math.max(...cls)),pct=Math.round(cls[dom]/tot*100);
+  const sw=el('span','sw');sw.style.background=col(dom);
+  const txt=el('div');const b1=el('b',null,`${CLS[dom].n} ${pct}%`);
+  txt.append(b1,document.createTextNode(`가 가장 큽니다. ${CLS[dom].hint}`));
+  if(tot>st.db.cores){txt.append(document.createTextNode(' 구간 평균이 CPU 코어 '+st.db.cores+'개를 넘어 세션이 대기열에 쌓이고 있습니다.'))}
+  diag.append(sw,txt);
+
+  const sqAll=attribute(SQLS,SQL_U,cls),ssAll=attribute(SESS,SESS_U,cls);
+  const ev=[];EVTS.forEach((list,c)=>list.forEach(([nm,sh])=>ev.push({nm,c,v:cls[c]*sh})));ev.sort((x,y)=>y.v-x.v);
+  DR={a,b,m,cls,tot,sqAll,ssAll,ev};
+  const pctOf=v=>Math.round(v/tot*100)+'%';
+  const clk=(li,label,fn)=>{li.className='clk';li.tabIndex=0;li.setAttribute('role','button');li.setAttribute('aria-label',label);
+    li.onclick=()=>openDrawer(fn,li);li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openDrawer(fn,li)}}};
+
+  const sq=sqAll.slice(0,5),sqMax=sq[0].t;
+  sq.forEach(r=>{const li=el('li'),top=el('div','rtop');top.append(el('span','id',r.o.id));const v=el('span','val',f1(r.t));v.append(el('small',null,pctOf(r.t)));top.append(v);
+    li.append(top,segBar(r.vec,sqMax),el('div','rtxt',r.o.txt));clk(li,`SQL ${r.o.id} 상세 보기`,()=>viewSql(r.o.id));$('topSql').append(li)});
+
+  const ss=ssAll.slice(0,5),ssMax=ss[0].t;
+  ss.forEach(r=>{const li=el('li'),top=el('div','rtop');top.append(el('span','id','SID '+r.o.sid));const v=el('span','val',f1(r.t));v.append(el('small',null,pctOf(r.t)));top.append(v);
+    const meta=el('div','rmeta');meta.append(el('span',null,r.o.u),el('span',null,r.o.p.replace('{h}',st.db.host)));
+    if(r.vec[4]/r.t>.3)meta.append(el('span','blk','블로커 SID 1287'));
+    li.append(top,segBar(r.vec,ssMax),meta);clk(li,`세션 SID ${r.o.sid} 상세 보기`,()=>viewSession(r.o.sid));$('topSess').append(li)});
+
+  const evTop=ev.slice(0,5),evMax=evTop[0].v;
+  evTop.forEach(r=>{const li=el('li'),top=el('div','rtop');top.append(el('span','id',r.nm));const v=el('span','val',f1(r.v));v.append(el('small',null,pctOf(r.v)));top.append(v);
+    const vec=new Array(NC).fill(0);vec[r.c]=r.v;li.append(top,segBar(vec,evMax),el('div','rmeta',CLS[r.c].n));clk(li,`대기 이벤트 ${r.nm} 상세 보기`,()=>viewEvent(r.nm,r.c));$('topEvt').append(li)});
+  if(dwStack.length)paintDrawer();
+}
+
+/* ===== 상세 드로어 ===== */
+const SINFO={
+ '1043':{serial:40217,machine:'was01.corp',module:'OrderService',osuser:'tomcat',spid:'48211',logon:'2026-09-24 09:12:44'},
+ '877': {serial:3312, machine:'was02.corp',module:'OrderService',osuser:'tomcat',spid:'48530',logon:'2026-09-24 09:14:02'},
+ '1502':{serial:7781, machine:'was01.corp',module:'OrderService',osuser:'tomcat',spid:'51102',logon:'2026-09-24 10:03:19'},
+ '312': {serial:1204, machine:'batch01',   module:'SQL*Plus',    osuser:'batch', spid:'39110',logon:'2026-09-24 06:00:01'},
+ '2':   {serial:1,    machine:'{h}',       module:'LGWR',        osuser:'oracle',spid:'3021', logon:'2026-09-20 02:11:37'},
+ '3':   {serial:1,    machine:'{h}',       module:'DBW0',        osuser:'oracle',spid:'3017', logon:'2026-09-20 02:11:36'},
+ '655': {serial:5520, machine:'PC-KIM-0412',module:'TOAD',       osuser:'kimdba',spid:'55014',logon:'2026-09-24 13:41:27'},
+ '1190':{serial:2290, machine:'web03.corp',module:'w3wp.exe',    osuser:'IIS APPPOOL',spid:'53320',logon:'2026-09-24 11:20:08'}
+};
+const hnum=s=>{let h=2166136261;for(const ch of String(s)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0};
+const argmax=a=>a.indexOf(Math.max(...a));
+function sessSql(s){if(s.u==='SYS')return null;let best=null,bs=-1;SQLS.forEach(q=>{const sc=sum(s.w.map((v,c)=>v*q.w[c]))/sum(q.w);if(sc>bs){bs=sc;best=q}});return best}
+function sessState(r){
+  const c=argmax(r.vec),share=r.vec[c]/r.t,bg=r.o.u==='SYS';
+  const waitSec=c===0?0:Math.round(4+share*170),lce=waitSec+hnum(r.o.sid)%40;
+  return{c,bg,share,waitSec,lce,state:c===0?'ON CPU':'WAITING',event:c===0?'CPU 사용 중 (대기 없음)':EVTS[c][0][0],blocker:r.vec[4]/r.t>.3?'1287':null};
+}
+
+let dwStack=[],dwFrom=null;
+function openDrawer(fn,from){dwFrom=from;dwStack=[fn];paintDrawer();$('dwClose').focus()}
+function pushDrawer(fn){dwStack.push(fn);paintDrawer();$('dwBody').scrollTop=0}
+function closeDrawer(){dwStack=[];$('drawer').hidden=true;$('drawerBg').hidden=true;if(dwFrom&&document.contains(dwFrom))dwFrom.focus()}
+function paintDrawer(){
+  const v=dwStack[dwStack.length-1]();
+  $('drawer').hidden=false;$('drawerBg').hidden=false;
+  $('dwBack').hidden=dwStack.length<2;
+  $('dwKind').textContent=v.kind;$('dwTitle').textContent=v.title;
+  const sub=$('dwSub');sub.textContent='';if(v.sub)sub.append(...v.sub);
+  const body=$('dwBody');body.textContent='';v.secs.forEach(s=>body.append(s));
+  const foot=$('dwFoot');foot.textContent='';(v.actions||[]).forEach(a=>foot.append(a));foot.hidden=!(v.actions||[]).length;
+}
+$('dwClose').onclick=closeDrawer;$('drawerBg').onclick=closeDrawer;
+$('dwBack').onclick=()=>{dwStack.pop();paintDrawer()};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&dwStack.length)closeDrawer()});
+
+function sec(title,...nodes){const s=el('section','dw-sec');s.append(el('h4',null,title),...nodes);return s}
+function kv(pairs){const d=el('dl','kv');pairs.forEach(([k,v,cls])=>{const dd=el('dd',cls||null);if(v instanceof Node)dd.append(v);else dd.textContent=v;d.append(el('dt',null,k),dd)});return d}
+function codeBlock(t){const p=el('pre','dw-code');p.textContent=t;return p}
+function queryBlock(t){const d=el('details','dw-q');d.append(el('summary',null,'조회 쿼리 보기'),codeBlock(t));return d}
+function linkBtn(t,fn){const b=el('button','dw-link',t);b.type='button';b.onclick=fn;return b}
+function copyBtn(label,text,disabled,why){const b=el('button','dw-act',label);b.type='button';
+  if(disabled){b.disabled=true;b.title=why;return b}
+  b.onclick=()=>{const ok=()=>{b.textContent='복사됨';setTimeout(()=>b.textContent=label,1500)};
+    try{navigator.clipboard.writeText(text).then(ok,()=>{b.textContent=text})}catch(e){b.textContent=text}};return b}
+function actBlock(r){
+  const wrap=el('div');const line=el('div','dw-actline');line.append(el('b','num',f1(r.t)),el('span',null,` AAS · 구간 전체의 ${Math.round(r.t/DR.tot*100)}%`));
+  const bar=segBar(r.vec,r.t);bar.style.width='100%';bar.classList.add('dw-bar');
+  const ul=el('ul','dw-cls');r.vec.map((v,c)=>({v,c})).filter(x=>x.v/r.t>=.02).sort((x,y)=>y.v-x.v).forEach(x=>{
+    const li=el('li'),s=el('span','sw');s.style.background=col(x.c);li.append(s,el('span',null,CLS[x.c].n),el('b','num',`${f1(x.v)} (${Math.round(x.v/r.t*100)}%)`));ul.append(li)});
+  wrap.append(line,bar,ul);return wrap;
+}
+function sessList(items,valFn){
+  const ul=el('ul','dw-list');
+  if(!items.length){ul.append(el('li','dw-empty','해당하는 세션이 없습니다.'));return ul}
+  items.forEach(r=>{const li=el('li','clk');li.tabIndex=0;li.setAttribute('role','button');
+    const top=el('div','rtop');top.append(el('span','id',`SID ${r.o.sid}`),el('span','val',valFn(r)));
+    const meta=el('div','rmeta');const ss=sessState(r);meta.append(el('span',null,r.o.u),el('span',null,ss.event));if(ss.blocker)meta.append(el('span','blk',`블로커 SID ${ss.blocker}`));
+    li.append(top,meta);const go=()=>pushDrawer(()=>viewSession(r.o.sid));li.onclick=go;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}};ul.append(li)});
+  return ul;
+}
+const winTxt=()=>`${hm(DR.a)} – ${hm(DR.b)} (${DR.m}분)`;
+
+function viewSession(sid){
+  const r=DR.ssAll.find(x=>x.o.sid===sid),s=r.o,i=SINFO[sid],ss=sessState(r),sql=sessSql(s),h=st.db.host;
+  const stPill=el('span','pill '+(ss.bg?'good':ss.blocker?'crit':'warn'));stPill.append(el('i'),document.createTextNode(ss.bg?'BACKGROUND':'ACTIVE'));
+  const blk=ss.blocker?(()=>{const sp=el('span','blk',`SID ${ss.blocker} (APP_USER · INACTIVE · 커밋 대기)`);return sp})():'없음';
+  const secs=[
+    sec('기본 정보',kv([['USERNAME',s.u],['PROGRAM',s.p.replace('{h}',h)],['MODULE',i.module],['MACHINE',i.machine.replace('{h}',h)],['OSUSER',i.osuser],['서버 PID (SPID)',i.spid],['LOGON_TIME',i.logon]])),
+    sec('현재 상태',kv([['STATE',ss.state],['EVENT',ss.event],['WAIT_CLASS',CLS[ss.c].n],['대기 시간',ss.waitSec?`${ss.waitSec}초`:'—'],['LAST_CALL_ET',`${ss.lce}초`],['BLOCKING_SESSION',blk,ss.blocker?'':null]])),
+    sec(`선택 구간 활동 · ${winTxt()}`,actBlock(r)),
+  ];
+  if(sql){const sid2=linkBtn(sql.id+' ›',()=>pushDrawer(()=>viewSql(sql.id)));
+    secs.push(sec('현재 SQL',kv([['SQL_ID',sid2],['PLAN_HASH_VALUE',String(hnum(sql.id)%4294967)]]),codeBlock(sql.txt)))}
+  else secs.push(sec('현재 SQL',el('p','dw-note','백그라운드 프로세스라 실행 중인 사용자 SQL이 없습니다.')));
+  secs.push(queryBlock(
+`SELECT s.sid, s.serial#, s.username, s.status, s.program, s.module,
+       s.machine, s.osuser, p.spid, s.logon_time, s.last_call_et,
+       s.state, s.event, s.wait_class,
+       ROUND(s.wait_time_micro / 1e6) AS wait_sec,
+       s.blocking_session, s.sql_id, q.plan_hash_value, q.sql_fulltext
+FROM   v$session s
+LEFT JOIN v$process p ON p.addr = s.paddr
+LEFT JOIN v$sql q     ON q.sql_id = s.sql_id
+                     AND q.child_number = s.sql_child_number
+WHERE  s.sid = :sid AND s.serial# = :serial;`));
+  const kill=`ALTER SYSTEM KILL SESSION '${sid},${i.serial}' IMMEDIATE;`;
+  return{kind:'세션 상세',title:`SID ${sid}, ${i.serial}`,sub:[stPill,document.createTextNode(` ${s.u} · ${s.p.replace('{h}',h)}`)],secs,
+    actions:[copyBtn('KILL 구문 복사',kill,ss.bg,'백그라운드 프로세스는 KILL할 수 없습니다')]};
+}
+
+function viewSql(id){
+  const r=DR.sqAll.find(x=>x.o.id===id),q=r.o,dbt=r.t*DR.m*60,exec=Math.max(1,Math.round(dbt*(2+hnum(id)%40))),
+    ela=dbt/exec*1000,bg=40+hnum(id+'g')%9000;
+  const sess=DR.ssAll.filter(x=>{const sq=sessSql(x.o);return sq&&sq.id===id});
+  const list=sess.length?sess:DR.ssAll.filter(x=>x.o.u!=='SYS').map(x=>({x,sc:sum(x.o.w.map((v,c)=>v*q.w[c]))})).sort((a,b)=>b.sc-a.sc).slice(0,2).map(y=>y.x);
+  const secs=[
+    sec('SQL 정보',kv([['SQL_ID',id],['PLAN_HASH_VALUE',String(hnum(id)%4294967)],['구간 실행 횟수',exec.toLocaleString()],['평균 수행 시간',ela>=1000?`${(ela/1000).toFixed(2)}초`:`${ela.toFixed(1)}ms`],['평균 Buffer Gets',bg.toLocaleString()],['구간 DB Time',`${Math.round(dbt)}초`]])),
+    sec(`선택 구간 활동 · ${winTxt()}`,actBlock(r)),
+    sec('SQL 텍스트',codeBlock(q.txt)),
+    sec(`이 SQL을 실행한 세션 (${list.length}) · 클릭하면 세션 상세`,sessList(list,x=>`${f1(x.t)} AAS`)),
+    queryBlock(
+`-- SQL 통계
+SELECT sql_id, plan_hash_value, executions, elapsed_time, buffer_gets, sql_fulltext
+FROM   v$sqlstats WHERE sql_id = :sql_id;
+
+-- 이 SQL을 실행 중인 세션
+SELECT sid, serial#, username, status, event, last_call_et
+FROM   v$session WHERE sql_id = :sql_id;`)
+  ];
+  return{kind:'SQL 상세',title:id,sub:[document.createTextNode(`${f1(r.t)} AAS · 구간 전체의 ${Math.round(r.t/DR.tot*100)}%`)],secs};
+}
+
+function viewEvent(nm,c){
+  const e=DR.ev.find(x=>x.nm===nm);
+  const list=DR.ssAll.filter(x=>x.vec[c]/x.t>=.12).sort((a,b)=>b.vec[c]-a.vec[c]);
+  const secs=[
+    sec('이벤트 정보',kv([['EVENT',nm],['WAIT_CLASS',CLS[c].n],['구간 평균 AAS',f1(e.v)],['구간 비중',`${Math.round(e.v/DR.tot*100)}%`],['구간',winTxt()]])),
+    sec('확인할 점',el('p','dw-note',CLS[c].hint)),
+    sec(`이 이벤트로 대기한 세션 (${list.length}) · 클릭하면 세션 상세`,sessList(list,x=>`${f1(x.vec[c])} AAS`)),
+    queryBlock(
+`SELECT s.sid, s.serial#, s.username, s.program, s.sql_id,
+       ROUND(s.wait_time_micro / 1e6) AS wait_sec, s.blocking_session
+FROM   v$session s
+WHERE  s.event = :event
+AND    s.state = 'WAITING'
+ORDER  BY s.wait_time_micro DESC;`)
+  ];
+  return{kind:'대기 이벤트 상세',title:nm,sub:[document.createTextNode(`${CLS[c].n} · ${f1(e.v)} AAS`)],secs};
+}
+
+
+/* ===== 점검 알림 ===== */
+const SEVL={crit:'위험',warn:'주의',info:'확인'};
+const ALERTS=[
+ {id:'ts-app-data',sev:'crit',cat:'테이블스페이스',name:'APP_DATA',kind:'pct',val:92.4,th:90,
+  detail:'412.3 / 446.0 GB · 여유 33.7 GB · 약 16일 후 가득 참',hist:[84.1,85.6,86.9,88.3,89.7,91.0,92.4],
+  kv:[['사용률','92.4% (임계 90%)'],['사용량','412.3 GB'],['최대 크기 (MAXSIZE 합)','446.0 GB'],['여유','33.7 GB'],['자동 확장','데이터파일 6개 모두 MAXSIZE 도달'],['일 평균 증가','+2.1 GB → 약 16일 후 가득 참']],
+  objTitle:'이 테이블스페이스의 큰 세그먼트',objs:[['APP.SALES_HIST','TABLE PARTITION','88.4 GB'],['APP.ORDERS','TABLE','61.7 GB'],['APP.ORDER_LOG','TABLE','48.2 GB'],['APP.PAYMENTS','TABLE','37.9 GB'],['APP.CUSTOMERS','TABLE','12.3 GB']],
+  action:'데이터파일을 추가하거나 MAXSIZE를 늘리세요. 증가를 주도하는 ORDER_LOG의 보관 정책(파티션 전환, 오래된 데이터 삭제 배치)도 함께 검토하세요.',
+  query:`SELECT m.tablespace_name,
+       ROUND(m.used_space      * t.block_size / POWER(1024,3), 1) AS used_gb,
+       ROUND(m.tablespace_size * t.block_size / POWER(1024,3), 1) AS max_gb,
+       ROUND(m.used_percent, 1)                                    AS used_pct
+FROM   dba_tablespace_usage_metrics m
+JOIN   dba_tablespaces t ON t.tablespace_name = m.tablespace_name
+WHERE  m.used_percent >= :warn_pct
+ORDER  BY m.used_percent DESC;
+
+-- 큰 세그먼트
+SELECT owner, segment_name, segment_type,
+       ROUND(SUM(bytes) / POWER(1024,3), 1) AS size_gb
+FROM   dba_segments
+WHERE  tablespace_name = :tablespace_name
+GROUP  BY owner, segment_name, segment_type
+ORDER  BY size_gb DESC
+FETCH FIRST 5 ROWS ONLY;`},
+ {id:'tb-order-log',sev:'crit',cat:'테이블 용량',name:'APP.ORDER_LOG',kind:'size',val:48.2,th:40,unit:'GB',
+  detail:'임계 40 GB · 일 증가 +1.3 GB · 파티션 없음',hist:[40.4,41.7,43.0,44.3,45.6,46.9,48.2],
+  kv:[['크기','48.2 GB (임계 40 GB)'],['테이블스페이스','APP_DATA'],['행 수 (통계 기준)','약 6억 1천만'],['일 평균 증가','+1.3 GB'],['파티션','없음'],['마지막 통계 수집','2026-09-20 22:10']],
+  objTitle:'관련 세그먼트',objs:[['APP.ORDER_LOG','TABLE','48.2 GB'],['APP.IX_ORDER_LOG_01','INDEX','14.6 GB'],['APP.PK_ORDER_LOG','INDEX','9.8 GB']],
+  action:'월 단위 Range 파티션으로 전환하고, 보관 기간이 지난 파티션을 DROP하는 방식으로 바꾸는 것을 검토하세요. 당장은 오래된 로그 삭제 배치 후 SHRINK가 필요합니다.',
+  query:`SELECT owner, segment_name,
+       ROUND(SUM(bytes) / POWER(1024,3), 1) AS size_gb
+FROM   dba_segments
+WHERE  segment_type IN ('TABLE','TABLE PARTITION','TABLE SUBPARTITION')
+AND    owner NOT IN ('SYS','SYSTEM','AUDSYS','XDB','MDSYS','CTXSYS')
+GROUP  BY owner, segment_name
+HAVING SUM(bytes) >= :limit_gb * POWER(1024,3)
+ORDER  BY size_gb DESC;
+-- 일 증가량은 자체 수집 테이블(MON_SEGMENT_SIZE, 일 1회 스냅샷)의 차이로 계산
+-- (dba_hist_seg_stat은 AWR 보관 기간·스냅샷 대상 세그먼트에 따라 누락이 있어 사용하지 않음)`},
+ {id:'ts-app-index',sev:'warn',cat:'테이블스페이스',name:'APP_INDEX',kind:'pct',val:86.1,th:85,
+  detail:'172.2 / 200.0 GB · 여유 27.8 GB',hist:[83.0,83.4,84.0,84.5,85.0,85.6,86.1],
+  kv:[['사용률','86.1% (임계 85%)'],['사용량','172.2 GB'],['최대 크기','200.0 GB'],['여유','27.8 GB'],['일 평균 증가','+0.5 GB → 약 55일 후 가득 참']],
+  objTitle:'이 테이블스페이스의 큰 세그먼트',objs:[['APP.IX_ORDER_LOG_01','INDEX','14.6 GB'],['APP.IX_SALES_HIST_02','INDEX PARTITION','13.1 GB'],['APP.PK_ORDER_LOG','INDEX','9.8 GB']],
+  action:'사용하지 않는 인덱스를 확인하고(인덱스 모니터링), 필요하면 데이터파일을 추가하세요.',
+  query:`SELECT m.tablespace_name, ROUND(m.used_percent, 1) AS used_pct
+FROM   dba_tablespace_usage_metrics m
+WHERE  m.tablespace_name = :tablespace_name;`},
+ {id:'fra',sev:'warn',cat:'FRA (Recovery Area)',name:'+RECO',kind:'pct',val:81.3,th:80,
+  detail:'406 / 500 GB · 아카이브 로그 74%',hist:[62.0,66.5,70.9,74.8,77.2,79.6,81.3],
+  kv:[['사용률 (회수 가능 제외)','81.3% (임계 80%)'],['사용량','406 GB'],['한도 (db_recovery_file_dest_size)','500 GB'],['아카이브 로그 비중','74%'],['백업 조각 비중','21%']],
+  objTitle:'파일 종류별 사용',objs:[['ARCHIVED LOG','','74.0%'],['BACKUP PIECE','','21.2%'],['FLASHBACK LOG','','4.1%'],['CONTROL FILE','','0.1%']],
+  action:'아카이브 로그 백업·삭제 배치(RMAN DELETE ARCHIVELOG … BACKED UP 1 TIMES)가 정상 동작하는지 확인하세요. 100%가 되면 DB가 멈춥니다.',
+  query:`SELECT name,
+       ROUND(space_limit / POWER(1024,3))                                  AS limit_gb,
+       ROUND(space_used  / POWER(1024,3))                                  AS used_gb,
+       ROUND((space_used - space_reclaimable) / space_limit * 100, 1)      AS used_pct
+FROM   v$recovery_file_dest;
+
+SELECT file_type, percent_space_used, percent_space_reclaimable
+FROM   v$recovery_area_usage
+ORDER  BY percent_space_used DESC;`},
+ {id:'temp',sev:'warn',cat:'TEMP 사용률',name:'TEMP',kind:'pct',val:77.8,th:75,
+  detail:'24.9 / 32.0 GB · 정렬 SQL 0w2qpuc6u2zsp',hist:null,
+  kv:[['사용률','77.8% (임계 75%)'],['사용량','24.9 GB'],['전체','32.0 GB'],['가장 많이 쓰는 SQL','0w2qpuc6u2zsp (18.2 GB, SORT)']],
+  objTitle:'TEMP 사용 세션',objs:[['SID 312 · BATCH','0w2qpuc6u2zsp','18.2 GB'],['SID 655 · RPT_USER','7h35uxf5uhmm1','5.1 GB'],['SID 1190 · APP_USER','3kqrku32p6sfn','1.6 GB']],
+  action:'대량 정렬 SQL의 실행계획을 확인하세요. ORA-01652가 나기 전에 TEMP 파일 추가를 검토하세요.',
+  query:`SELECT s.tablespace_name,
+       ROUND(s.used_blocks  * t.block_size / POWER(1024,3), 1) AS used_gb,
+       ROUND(s.total_blocks * t.block_size / POWER(1024,3), 1) AS total_gb
+FROM   v$sort_segment s
+JOIN   dba_tablespaces t ON t.tablespace_name = s.tablespace_name;
+
+SELECT u.session_num AS serial#, s.sid, s.username, u.sql_id, u.segtype,
+       ROUND(u.blocks * t.block_size / POWER(1024,3), 1) AS used_gb
+FROM   v$tempseg_usage u
+JOIN   v$session s       ON s.saddr = u.session_addr
+JOIN   dba_tablespaces t ON t.tablespace_name = u.tablespace
+ORDER  BY u.blocks DESC;`},
+ {id:'job-settle',sev:'warn',cat:'스케줄러 잡 실패',name:'SETTLE_DAILY_JOB',kind:'text',vtxt:'2회 연속',
+  detail:'마지막 실패 06:00 · ORA-01652 (TEMP 부족)',hist:null,
+  kv:[['잡','BATCH.SETTLE_DAILY_JOB'],['상태','2회 연속 실패'],['마지막 실행','2026-09-24 06:00:01'],['오류','ORA-01652: unable to extend temp segment by 128 in tablespace TEMP'],['다음 실행','2026-09-25 06:00:00']],
+  objTitle:'최근 실행 이력',objs:[['2026-09-24 06:00','FAILED','ORA-01652'],['2026-09-23 06:00','FAILED','ORA-01652'],['2026-09-22 06:00','SUCCEEDED','42분']],
+  action:'TEMP 부족으로 실패하고 있습니다. 위 TEMP 알림과 같은 원인일 가능성이 높으니 함께 처리하세요.',
+  query:`SELECT owner, job_name, status, actual_start_date, run_duration,
+       error#, additional_info
+FROM   dba_scheduler_job_run_details
+WHERE  log_date > SYSDATE - 1
+AND    status <> 'SUCCEEDED'
+ORDER  BY log_date DESC;`},
+ {id:'invalid',sev:'info',cat:'무효 객체',name:'APP 스키마',kind:'count',val:12,unitTxt:'개',
+  detail:'PACKAGE BODY 5 · VIEW 4 · TRIGGER 3',hist:null,
+  kv:[['무효 객체 수','12개'],['PACKAGE BODY','5'],['VIEW','4'],['TRIGGER','3'],['마지막 DDL','2026-09-24 01:12 (APP.ORDERS 컬럼 추가)']],
+  objTitle:'무효 객체',objs:[['APP.PKG_ORDER','PACKAGE BODY',''],['APP.PKG_BATCH','PACKAGE BODY',''],['APP.V_ORDER_SUMMARY','VIEW',''],['APP.TRG_ORDERS_AUD','TRIGGER','']],
+  action:'어젯밤 ORDERS 테이블 DDL 이후 무효화된 것으로 보입니다. UTL_RECOMP 또는 ALTER … COMPILE로 재컴파일하고, 컴파일 오류가 남는 객체를 확인하세요.',
+  query:`SELECT owner, object_type, object_name, last_ddl_time
+FROM   dba_objects
+WHERE  status = 'INVALID'
+AND    owner NOT IN ('SYS','SYSTEM','AUDSYS','XDB','MDSYS','CTXSYS')
+ORDER  BY owner, object_type, object_name;`},
+ {id:'stale',sev:'info',cat:'통계 정보 오래됨',name:'23개 테이블',kind:'count',val:23,unitTxt:'개',
+  detail:'가장 오래됨 APP.PAYMENTS · 41일 전',hist:null,
+  kv:[['STALE 테이블','23개'],['가장 오래된 통계','APP.PAYMENTS (41일 전)'],['자동 통계 수집 잡','ENABLED · 최근 실행 시간 초과로 일부 미수집']],
+  objTitle:'통계가 오래된 큰 테이블',objs:[['APP.PAYMENTS','41일 전','37.9 GB'],['APP.ORDERS','9일 전','61.7 GB'],['APP.ORDER_LOG','4일 전','48.2 GB']],
+  action:'큰 테이블 위주로 DBMS_STATS.GATHER_TABLE_STATS를 수동 실행하고, 자동 통계 수집 윈도우 시간을 늘리는 것을 검토하세요.',
+  query:`SELECT owner, table_name, partition_name, last_analyzed, num_rows
+FROM   dba_tab_statistics
+WHERE  stale_stats = 'YES'
+AND    owner NOT IN ('SYS','SYSTEM','AUDSYS','XDB','MDSYS','CTXSYS')
+ORDER  BY last_analyzed NULLS FIRST;`}
+];
+let alFilter='all';
+function alValTxt(a){return a.kind==='pct'?`${a.val.toFixed(1)}%`:a.kind==='size'?`${a.val} ${a.unit}`:a.kind==='count'?`${a.val}${a.unitTxt}`:a.vtxt}
+function alMeter(a){
+  if(a.kind!=='pct'&&a.kind!=='size')return null;
+  const max=a.kind==='pct'?100:a.th*1.4,m=el('div','al-meter');
+  const f=el('span','al-fill '+a.sev);f.style.width=Math.min(100,a.val/max*100)+'%';
+  const t=el('i','al-th');t.style.left=(a.th/max*100)+'%';t.title=`임계 ${a.th}${a.kind==='pct'?'%':' '+a.unit}`;
+  m.append(f,t);return m;
+}
+function sevPill(sev){const p=el('span','pill '+(sev==='crit'?'crit':sev==='warn'?'warn':'info'));p.append(el('i'),document.createTextNode(SEVL[sev]));return p}
+function renderAlerts(){
+  const list=$('alList');list.textContent='';
+  const cnt={crit:0,warn:0,info:0};ALERTS.forEach(a=>cnt[a.sev]++);
+  const sum=$('alSum');sum.textContent='';
+  [['crit',cnt.crit],['warn',cnt.warn],['info',cnt.info]].forEach(([s,n])=>{const p=sevPill(s);p.lastChild.textContent=`${SEVL[s]} ${n}`;sum.append(p)});
+  document.querySelectorAll('#alFilter button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.f===alFilter?'true':'false'));
+  const rank={crit:0,warn:1,info:2};
+  ALERTS.filter(a=>alFilter==='all'||a.sev===alFilter).sort((x,y)=>rank[x.sev]-rank[y.sev]).forEach(a=>{
+    const c=el('button','al-card '+a.sev);c.type='button';c.setAttribute('aria-label',`${SEVL[a.sev]} ${a.cat} ${a.name} ${alValTxt(a)} 상세 보기`);
+    const r1=el('div','al-r1');r1.append(sevPill(a.sev),el('span','al-cat',a.cat));
+    const r2=el('div','al-r2');r2.append(el('span','al-name mono',a.name),el('span','al-val num',alValTxt(a)));
+    c.append(r1,r2);const m=alMeter(a);if(m)c.append(m);
+    c.append(el('div','al-detail',a.detail));
+    c.onclick=()=>openDrawer(()=>viewAlert(a.id),c);list.append(c)});
+}
+document.querySelectorAll('#alFilter button').forEach(b=>b.onclick=()=>{alFilter=b.dataset.f;renderAlerts()});
+function sparkline(a){
+  const W=420,H=90,ml=34,mr=10,mt=10,mb=18,pw=W-ml-mr,ph=H-mt-mb,h=a.hist,n=h.length;
+  const lo=Math.floor(Math.min(...h,a.th)-2),hi=Math.ceil(Math.max(...h,a.th)+2);
+  const x=i=>ml+i/(n-1)*pw,y=v=>mt+ph-(v-lo)/(hi-lo)*ph;
+  let s=`<line class="gridl" x1="${ml}" x2="${ml+pw}" y1="${y(lo)}" y2="${y(lo)}"/>`;
+  [lo,hi].forEach(v=>s+=`<text class="tick" x="${ml-5}" y="${y(v)+3.5}" text-anchor="end">${v}</text>`);
+  s+=`<line class="thl" x1="${ml}" x2="${ml+pw}" y1="${y(a.th).toFixed(1)}" y2="${y(a.th).toFixed(1)}"/><text class="tick" x="${ml+4}" y="${(y(a.th)-4).toFixed(1)}">임계 ${a.th}</text>`;
+  s+=`<polyline class="al-spk ${a.sev}" points="${h.map((v,i)=>`${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')}"/>`;
+  s+=`<circle cx="${x(n-1)}" cy="${y(h[n-1])}" r="3.5" class="al-dot ${a.sev}"/>`;
+  ['6일 전','오늘'].forEach((t,k)=>s+=`<text class="tick" x="${k?ml+pw:ml}" y="${H-4}" text-anchor="${k?'end':'start'}">${t}</text>`);
+  const w=el('div','al-spkwrap');w.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="최근 7일 추이">${s}</svg>`;return w;
+}
+function viewAlert(id){
+  const a=ALERTS.find(x=>x.id===id);
+  const secs=[sec('상태',kv(a.kv))];
+  if(a.hist)secs.push(sec('최근 7일 추이',sparkline(a)));
+  const ul=el('ul','dw-list');a.objs.forEach(o=>{const li=el('li'),top=el('div','rtop');top.append(el('span','id',o[0]),el('span','val',o[2]||''));li.append(top);if(o[1])li.append(el('div','rmeta',o[1]));ul.append(li)});
+  secs.push(sec(a.objTitle,ul),sec('조치 권장',el('p','dw-note',a.action)),queryBlock(a.query));
+  return{kind:`점검 알림 · ${a.cat}`,title:a.name,sub:[sevPill(a.sev),document.createTextNode(` ${alValTxt(a)}${a.th!=null?` · 임계 ${a.th}${a.kind==='pct'?'%':a.unit?' '+a.unit:''}`:''}`)],secs};
+}
+renderAlerts();
+
+function renderTable(){
+  const w=$('tblWrap');if(w.hidden||st.db.fail)return;w.textContent='';
+  const {i0,rows}=view(),t=el('table'),th=el('thead'),hr=el('tr');
+  hr.append(el('th',null,'시각'));CLS.forEach((c,i)=>{if(!st.hidden.has(i))hr.append(el('th',null,c.n))});hr.append(el('th',null,'합계'));th.append(hr);t.append(th);
+  const tb=el('tbody');
+  rows.slice().reverse().forEach((r,k)=>{const gi=N-1-k,tr=el('tr');const tv=vis(r);if(tv>st.db.cores)tr.className='over';
+    tr.append(el('td',null,hm(gi)));r.forEach((v,c)=>{if(!st.hidden.has(c))tr.append(el('td',null,f1(v)))});tr.append(el('td',null,f1(tv)));tb.append(tr)});
+  t.append(tb);w.append(t);
+}
+$('tblBtn').onclick=()=>{const w=$('tblWrap');w.hidden=!w.hidden;$('tblBtn').setAttribute('aria-expanded',String(!w.hidden));$('tblBtn').textContent=w.hidden?'표로 보기':'표 닫기';renderTable()};
+$('clearSelBtn').onclick=()=>{st.sel=null;st.userSel=false;st.sel=defaultSel();renderChart();renderDrill();renderTable()};
+
+document.querySelectorAll('#rangeSeg button').forEach(b=>b.onclick=()=>{st.range=+b.dataset.r;const {i0}=view();if(!st.sel||st.sel[0]<i0){st.sel=null;st.userSel=false}renderAll()});
+
+function renderAll(){
+  if(!st.db.fail&&!st.sel)st.sel=defaultSel();
+  renderHead();renderKpis();renderLegend();renderChart();renderDrill();renderTable();
+}
+new ResizeObserver(()=>renderChart()).observe($('plot'));
+renderAll();
+window.__aasRefresh=renderAll;
+})();
+</script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const el=(t,cls,txt)=>{const e=document.createElement(t);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+const hms=s=>[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(v=>String(v).padStart(2,'0')).join(':');
+const mmss=s=>s>=60?`${Math.floor(s/60)}분 ${String(s%60).padStart(2,'0')}초`:`${s}초`;
+// TICK = 초기 이력 생성 간격(기본 리프레쉬 주기와 같음). 실시간 갱신은 refreshSec(화면에서 2~60초 조절)을 따른다.
+// 이력은 포인트 수가 아니라 시간(최근 KEEP_SEC초) 기준으로 유지한다.
+const TICK=3,KEEP_SEC=600,WARN=5,LCE=60,HOLD_LIMIT=6,REFRESH_MIN=2,REFRESH_MAX=60;
+let refreshSec=3;
+const TYPE={TX:{c:'var(--wc-4)'},TM:{c:'var(--wc-6)'}};
+const TXPOOL=[
+ {sid:1287,serial:40321,cap:14},{sid:2051,serial:873,cap:8},{sid:1766,serial:5120,cap:6}
+];
+const HPOOL=[
+ {sid:944, user:'BATCH',   prog:'sqlplus@batch01',  obj:'APP.ORDER_ITEMS'},
+ {sid:618, user:'APP_USER',prog:'JDBC Thin Client', obj:'APP.ORDER_ITEMS'},
+ {sid:1311,user:'APP_USER',prog:'JDBC Thin Client', obj:'APP.ORDERS'},
+ {sid:1420,user:'APP_USER',prog:'w3wp.exe',         obj:'APP.ORDER_ITEMS'},
+ {sid:733, user:'RPT_USER',prog:'Toad.exe',         obj:'APP.ORDERS'},
+ {sid:1588,user:'APP_USER',prog:'JDBC Thin Client', obj:'APP.ORDER_ITEMS'},
+ {sid:402, user:'BATCH',   prog:'sqlplus@batch02',  obj:'APP.ORDERS'},
+ {sid:1904,user:'APP_USER',prog:'JDBC Thin Client', obj:'APP.ORDER_ITEMS'}
+];
+let seed=42;const R=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+let clock=14*3600+20*60,hp=0,cool=0;const tx=[],holders=[],hist=[],kills=[];
+function addHolder(lce){let p;for(let k=0;k<HPOOL.length;k++){const c=HPOOL[hp++%HPOOL.length];if(!holders.some(h=>h.sid===c.sid)){p=c;break}}if(!p)return;holders.push({...p,serial:1000+Math.floor(R()*50000),lce,waiters:0})}
+const overCnt=()=>holders.filter(h=>h.lce>=LCE).length;
+const incident=()=>overCnt()>=HOLD_LIMIT;
+function step(dt=TICK){
+  clock+=dt;
+  // TX 블로커
+  for(let i=tx.length-1;i>=0;i--){const b=tx[i],age=clock-b.start;b.waiters=Math.max(1,Math.min(b.cap,b.waiters+(R()<.3?1:0)-(R()<.08?1:0)));
+    if(clock>=b.pin&&age>30&&R()<.015+age/4000)tx.splice(i,1)}
+  if(!tx.length&&R()<.025){const p=TXPOOL[Math.floor(R()*TXPOOL.length)];tx.push({...p,waiters:1+Math.floor(R()*2),start:clock,pin:0})}
+  // TM Holder: 커밋하지 않고 멈춘 트랜잭션이 쌓이는 상황
+  holders.forEach(h=>{h.lce+=dt;const tgt=h.lce>=LCE?2:h.lce>=30?1:0;h.waiters=Math.max(0,Math.min(3,tgt+(R()<.2?1:0)-(R()<.15?1:0)))});
+  if(cool>0)cool--;else if(holders.length<7&&R()<.09)addHolder(0);
+  const txc=tx.reduce((s,b)=>s+b.waiters,0),tmc=holders.reduce((s,h)=>s+h.waiters,0);
+  hist.push({t:clock,tx:txc,tm:tmc,inc:incident()});while(hist.length>2&&hist[0].t<clock-KEEP_SEC)hist.shift();
+}
+// 초기 이력 10분(3초 간격 200포인트): 앞부분은 평온, 마지막 몇 분 동안 TM Holder가 쌓임
+cool=240;for(let i=0;i<150;i++)step();
+tx.length=0;tx.push({...TXPOOL[0],waiters:2,start:clock,pin:clock+50*TICK+60});
+const plan=[150,129,105,87,69,51,21];holders.length=0;cool=9999;
+for(let i=0;i<50;i++){plan.forEach(l=>{if(l===(50-i)*TICK)addHolder(0)});step()}
+holders.length=Math.min(holders.length,plan.length);holders.forEach((h,k)=>h.lce=plan[k]);
+
+let paused=false,hover=null,G=null,panelOpen=false,log=null;
+function lvl(v,w,c){return v>=c?{c:'crit',t:'위험'}:v>=w?{c:'warn',t:'주의'}:{c:'good',t:'정상'}}
+function pill(s,txt){const p=el('span','pill '+s.c);p.append(el('i'),document.createTextNode(txt||s.t));return p}
+
+function renderStats(){
+  const box=$('lkStats');box.textContent='';const h=hist[hist.length-1];
+  const add=(key,lbl,v,unit,p)=>{const d=el('div','kpi'),l=el('span','lbl');if(key){const k=el('i','k2');k.style.background=key;l.append(k)}l.append(document.createTextNode(lbl));
+    const vv=el('span','v num',v);if(unit)vv.append(el('small',null,unit));const s=el('span','s');s.append(p);d.append(l,vv,s);box.append(d)};
+  add(TYPE.TX.c,'TX 대기 세션',String(h.tx),'건',pill(lvl(h.tx,1,WARN),h.tx?null:'대기 없음'));
+  add(TYPE.TM.c,'TM 대기 세션',String(h.tm),'건',pill(lvl(h.tm,1,3),h.tm?null:'대기 없음'));
+  const oc=overCnt();
+  add(null,'TM Holder (60초↑)',String(oc),`/ ${HOLD_LIMIT}개`,pill(oc>=HOLD_LIMIT?{c:'crit',t:'장애 기준 도달'}:oc>=3?{c:'warn',t:`기준까지 ${HOLD_LIMIT-oc}개`}:{c:'good',t:`전체 Holder ${holders.length}개`}));
+  const maxL=holders.reduce((m,x)=>Math.max(m,x.lce),0);
+  add(null,'최장 last_call_et',maxL?mmss(maxL):'—','',pill(lvl(maxL,30,LCE),maxL?null:'Holder 없음'));
+}
+
+function renderIncident(){
+  const card=$('lockCard'),on=incident(),bar=$('incBar');
+  card.classList.toggle('incident',on);bar.hidden=!on;
+  if(on){$('incTxt').textContent=`last_call_et 60초 이상 TM Lock Holder ${overCnt()}개 · 기준 ${HOLD_LIMIT}개 이상 · 전체 Holder ${holders.length}개`;
+    $('incBtn').textContent=`장애 처리 · TM Holder ${holders.length}개 KILL`}
+  if(!on&&panelOpen)closePanel();
+  const lg=$('lkLog');lg.hidden=!log;if(log)lg.textContent=log;
+}
+
+function openPanel(){
+  panelOpen=true;const p=$('killPanel');p.textContent='';p.hidden=false;
+  p.append(el('h3',null,`TM Lock Holder ${holders.length}개 세션을 KILL 합니다`));
+  p.append(el('p','sub','기본값은 전체 선택입니다. 대상은 실행 직전에 다시 조회해서, 그 사이 커밋·종료된 세션은 건너뜁니다.'));
+  const wrap=el('div','tablewrap'),t=el('table'),hr=el('tr');
+  ['','SID,SERIAL#','사용자 · 프로그램','잠금 객체','last_call_et','막고 있는 세션'].forEach(h=>hr.append(el('th',null,h)));
+  const th=el('thead');th.append(hr);t.append(th);const tb=el('tbody');
+  holders.slice().sort((a,b)=>b.lce-a.lce).forEach(h=>{
+    const tr=el('tr'),c=el('td'),cb=el('input');cb.type='checkbox';cb.checked=true;cb.id='k'+h.sid;cb.dataset.sid=h.sid;cb.onchange=updCmd;c.append(cb);
+    const lce=el('td','num',mmss(h.lce));if(h.lce<LCE)lce.append(el('span','short','60초 미만'));
+    const lab=el('label','mono',`${h.sid},${h.serial}`);lab.htmlFor=cb.id;const sidTd=el('td');sidTd.append(lab);
+    tr.append(c,sidTd,el('td',null,`${h.user} · ${h.prog}`),el('td','mono',h.obj),lce,el('td','n num',`${h.waiters}건`));tb.append(tr)});
+  t.append(tb);wrap.append(t);p.append(wrap);
+  const pre=el('pre');pre.id='kpCmd';p.append(pre);
+  const act=el('div','kp-act'),cancel=el('button','linkbtn','취소'),go=el('button','killbtn');cancel.type=go.type='button';go.id='kpGo';
+  cancel.onclick=closePanel;go.onclick=execKill;act.append(cancel,go);p.append(act);updCmd();go.focus();
+}
+function sel(){return [...document.querySelectorAll('#killPanel input[type=checkbox]:checked')].map(c=>+c.dataset.sid)}
+function updCmd(){const s=sel(),hs=holders.filter(h=>s.includes(h.sid));
+  $('kpCmd').textContent=hs.length?hs.map(h=>`ALTER SYSTEM KILL SESSION '${h.sid},${h.serial}' IMMEDIATE;`).join('\n'):'-- 선택된 세션이 없습니다';
+  const go=$('kpGo');go.textContent=`KILL 실행 (${hs.length}개)`;go.disabled=!hs.length}
+function closePanel(){panelOpen=false;const p=$('killPanel');p.hidden=true;p.textContent=''}
+function execKill(){
+  const s=sel(),go=$('kpGo');go.disabled=true;go.textContent='KILL 실행 중…';
+  setTimeout(()=>{
+    const done=holders.filter(h=>s.includes(h.sid));
+    for(let i=holders.length-1;i>=0;i--)if(s.includes(holders[i].sid))holders.splice(i,1);
+    kills.push(clock);cool=45;
+    log=`${hms(clock)} 장애 처리 완료 · TM Lock Holder ${done.length}개 세션 KILL (SID ${done.map(h=>h.sid).join(', ')}) · 목업이라 실제 DB에는 실행되지 않습니다.`;
+    const last=hist[hist.length-1];last.tm=holders.reduce((a,h)=>a+h.waiters,0);last.inc=incident();
+    closePanel();render();
+  },1200);
+}
+$('incBtn').onclick=()=>{panelOpen?closePanel():openPanel()};
+
+function renderChart(){
+  const plot=$('lkPlot'),svg=$('lkSvg');
+  const W=Math.max(260,plot.clientWidth),H=Math.max(60,plot.clientHeight),ml=28,mr=W<520?40:50,mt=10,mb=18,pw=W-ml-mr,ph=H-mt-mb;
+  const n=hist.length,t0=hist[0].t,t1=hist[n-1].t;
+  const mx=Math.max(...hist.map(h=>Math.max(h.tx,h.tm)),WARN+1);
+  const step=mx<=8?2:mx<=20?5:10,top=Math.ceil(mx*1.1/step)*step;
+  const x=t=>ml+(t-t0)/(t1-t0)*pw,y=v=>mt+ph-v/top*ph;G={W,ml,pw,t0,t1,x};
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('height',H);
+  let s='';
+  // 장애 조건이 성립한 구간을 붉게
+  for(let i=0;i<n;i++){if(!hist[i].inc)continue;let j=i;while(j+1<n&&hist[j+1].inc)j++;const xa=x(hist[i].t),xb=j+1<n?x(hist[j+1].t):x(hist[j].t);
+    s+=`<rect class="incbg" x="${xa.toFixed(1)}" y="${mt}" width="${Math.max(2,xb-xa).toFixed(1)}" height="${ph}"/>`;i=j}
+  for(let v=0;v<=top;v+=step){const yy=y(v).toFixed(1);s+=`<line class="${v?'gridl':'base'}" x1="${ml}" x2="${ml+pw}" y1="${yy}" y2="${yy}"/><text class="tick" x="${ml-6}" y="${+yy+3.5}" text-anchor="end">${v}</text>`}
+  for(let t=Math.ceil(t0/120)*120;t<=t1;t+=120){s+=`<text class="tick" x="${x(t).toFixed(1)}" y="${H-5}" text-anchor="middle">${hms(t).slice(0,5)}</text>`}
+  const wy=y(WARN).toFixed(1);s+=`<line class="thl" x1="${ml}" x2="${ml+pw}" y1="${wy}" y2="${wy}"/>`;
+  const path=k=>{let d=`M${x(hist[0].t).toFixed(1)},${y(hist[0][k]).toFixed(1)}`;for(let i=1;i<n;i++){d+=`H${x(hist[i].t).toFixed(1)}V${y(hist[i][k]).toFixed(1)}`}return d};
+  const txd=path('tx');
+  s+=`<path class="lkarea" d="${txd}V${y(0)}H${ml}Z" style="fill:${TYPE.TX.c}"/>`;
+  s+=`<path class="lkline" d="${path('tm')}" style="stroke:${TYPE.TM.c}"/>`;
+  s+=`<path class="lkline" d="${txd}" style="stroke:${TYPE.TX.c}"/>`;
+  kills.filter(k=>k>=t0).forEach(k=>{const kx=x(k).toFixed(1);s+=`<line class="killmk" x1="${kx}" x2="${kx}" y1="${mt}" y2="${mt+ph}"/><text class="killlbl" x="${+kx+4}" y="${mt+9}">KILL</text>`});
+  const L=hist[n-1];let ytx=y(L.tx),ytm=y(L.tm);if(Math.abs(ytx-ytm)<13){if(L.tx>=L.tm){ytx=Math.min(ytx,ytm)-7;ytm=ytx+14}else{ytm=Math.min(ytx,ytm)-7;ytx=ytm+14}}
+  s+=`<circle cx="${x(L.t)}" cy="${y(L.tx)}" r="4" style="fill:${TYPE.TX.c};stroke:var(--surface);stroke-width:2"/>`;
+  s+=`<circle cx="${x(L.t)}" cy="${y(L.tm)}" r="4" style="fill:${TYPE.TM.c};stroke:var(--surface);stroke-width:2"/>`;
+  s+=`<text class="endlbl" x="${ml+pw+8}" y="${(ytx+4).toFixed(1)}">TX ${L.tx}</text><text class="endlbl" x="${ml+pw+8}" y="${(ytm+4).toFixed(1)}">TM ${L.tm}</text>`;
+  if(hover!=null&&hover>=t0){const hx=x(hover).toFixed(1);s+=`<line class="xh" x1="${hx}" x2="${hx}" y1="${mt}" y2="${mt+ph}"/>`}
+  svg.innerHTML=s;showTip();
+}
+function showTip(){
+  const tip=$('lkTip');if(hover==null||!G){tip.hidden=true;return}
+  const h=hist.find(p=>p.t===hover);if(!h){tip.hidden=true;return}
+  tip.textContent='';const t=el('div','t');t.append(el('span',null,hms(h.t)),el('span',null,h.inc?'장애 조건':'대기 세션'));tip.append(t);
+  [['TX','tx'],['TM','tm']].forEach(([n,k])=>{const r=el('div','r'),kk=el('span','k');kk.style.background=TYPE[n].c;r.append(kk,el('b',null,h[k]+'건'),el('span',null,n+' Lock'));tip.append(r)});
+  tip.hidden=false;const px=G.x(h.t),tw=tip.offsetWidth,W=$('lkPlot').clientWidth;tip.style.left=(px+14+tw>W?Math.max(0,px-14-tw):px+14)+'px';
+}
+function render(){renderStats();renderIncident();renderChart()}
+
+const plot=$('lkPlot');
+// 주기가 바뀌면 포인트 간격이 일정하지 않으므로, 격자가 아니라 가장 가까운 실제 포인트에 붙인다.
+const nearestIdx=t=>{let b=0;for(let i=1;i<hist.length;i++)if(Math.abs(hist[i].t-t)<Math.abs(hist[b].t-t))b=i;return b};
+const tAt=e=>{const r=$('lkSvg').getBoundingClientRect(),sx=(e.clientX-r.left)*(G.W/r.width);const t=G.t0+(sx-G.ml)/G.pw*(G.t1-G.t0);return hist[nearestIdx(t)].t};
+plot.addEventListener('pointermove',e=>{if(!G)return;hover=tAt(e);renderChart()});
+plot.addEventListener('pointerleave',()=>{hover=null;renderChart()});
+plot.addEventListener('keydown',e=>{if(!G)return;let i=hover==null?hist.length-1:nearestIdx(hover);if(e.key==='ArrowLeft')i=Math.max(0,i-1);else if(e.key==='ArrowRight')i=Math.min(hist.length-1,i+1);else return;e.preventDefault();hover=hist[i].t;renderChart()});
+plot.addEventListener('blur',()=>{hover=null;renderChart()});
+$('lkPause').onclick=()=>{paused=!paused;const b=$('lkPause');b.setAttribute('aria-pressed',String(paused));b.textContent=paused?'자동 갱신 재개':'자동 갱신 중지';
+  updLive();if(!paused)render()};
+function updLive(){const l=$('lkLive');l.classList.toggle('paused',paused);l.lastChild.textContent=paused?'일시정지됨':`LIVE · ${refreshSec}초 주기`;
+  $('lkSrc').textContent=`v$session · v$lock · ${refreshSec}초`}
+// 리프레쉬 주기: 입력값을 2~60초로 보정하고 다음 주기부터 바로 적용(타이머 재시작)
+let timer=null;
+function schedule(){clearTimeout(timer);timer=setTimeout(()=>{step(refreshSec);if(!paused)render();schedule()},refreshSec*1000)}
+$('refreshSec').addEventListener('change',e=>{const v=Math.round(+e.target.value);
+  refreshSec=Number.isFinite(v)&&v>0?Math.max(REFRESH_MIN,Math.min(REFRESH_MAX,v)):3;
+  e.target.value=refreshSec;updLive();schedule()});
+schedule();
+new ResizeObserver(()=>renderChart()).observe(plot);
+render();
+window.__lockRefresh=()=>{step(refreshSec);render();schedule()};
+document.getElementById('manualRefresh').onclick=()=>{window.__aasRefresh&&window.__aasRefresh();window.__lockRefresh&&window.__lockRefresh()};
+})();
+</script>
+</body>
+</html>
