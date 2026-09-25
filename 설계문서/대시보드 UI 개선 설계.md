@@ -69,7 +69,7 @@ v2 대시보드와의 관계 (2026-09-25 결정): 우측 하단 전환 스위치
 │          │        [15분|1시간|3시간|24시간] 리프레쉬 주기(초): 2           │
 │          │        [↻ 수동 새로고침] [자동 갱신 중지]                        │
 │          ├──────────────────────────────────────────────────────────────┤
-│          │ ① KPI: 현재 AAS | 구간 평균 AAS | 최대 AAS | CPU 코어 초과       │
+│          │ ① KPI: 현재 AAS | 구간 평균 | 최대 | 코어 초과 | 활성 세션 | 메모리 │
 │          ├───────────────────────────────┬──────────────────────────────┤
 │          │ ② 평균 활성 세션(대기 클래스별) │ ③ Lock 대기 세션 (실시간)     │
 │          │    누적 영역 차트               │    TX/TM 대기 건수 차트       │
@@ -353,7 +353,7 @@ WHERE  last_active_time >= SYSDATE - 2/1440;
 
 ## 5. 프레임별 명세
 
-### ① KPI (4칸, 한 카드)
+### ① KPI (6칸, 한 카드 — 2026-09-25 활성 세션·메모리 사용률 칸 추가)
 
 | 항목 | 값 | 보조 표시 |
 |---|---|---|
@@ -361,9 +361,13 @@ WHERE  last_active_time >= SYSDATE - 2/1440;
 | 구간 평균 AAS | 조회 구간 평균 | `최근 1시간` |
 | 최대 AAS | 조회 구간 최대 | `hh:mm · 코어의 166%` |
 | CPU 코어 초과 | 구간 내 `AAS_TOTAL > CPU_CORES` 인 분 수 | 0분=정상(●), 1~9분=serious(◆), 10분 이상=crit(■) + 라벨 |
+| 활성 세션 | 현재 ACTIVE 세션 수 (기존 대시보드 "활성 세션"과 같은 정의: `v$session` `status='ACTIVE'`, 백그라운드·username 없는 세션·모니터링 계정 제외) | 숫자 **아래 작은 가로 막대 1개** (10칸 세그먼트, DB별 세션 임계치의 5번째 값 = 가득 참, 색은 기존 활성 세션 임계치 색 규칙). 기존 대시보드의 도넛형 그래프를 대체 |
+| 메모리 사용률 | (SGA + PGA 할당량) ÷ 물리 메모리 × 100 (기존 대시보드 "메모리"와 같은 정의: `v$sgastat` 합 + `v$pgastat` 'total PGA allocated', `v$osstat` PHYSICAL_MEMORY_BYTES) | 숫자(%) **아래 작은 가로 막대 1개** (10칸 세그먼트, 100% = 가득 참, 80% 이상 주의·90% 이상 위험 색 — 기존과 같음). 기존 대시보드의 도넛형 그래프를 대체 |
 
 - **`AAS_TOTAL` = 그 분의 `ash_wc_*` 8분류 합계**다. ② 차트의 누적 높이와 KPI 숫자가 항상 같도록 `v$sysmetric`의 `db_time_aas`는 KPI에 쓰지 않는다.
 - `CPU_CORES` = `ash_cpu_cores` (4.3 (2), `NUM_CPU_CORES`).
+- **활성 세션 칸 (2026-09-25 오케스트레이터 요청 추가)**: 다른 4칸은 조회 구간(1분 수집) 기준이지만 이 칸은 **현재 값**이다. ③ Lock 실시간과 같은 리프레쉬 주기(기본 3초)로 갱신하며, 값은 `/api/dashboard/{dbId}/lock/realtime` 응답의 `activeSessions`로 받는다 — 같은 커넥션에서 `COUNT(*)` 1개만 더 하고 2초 캐시·진행 중 요청 공유를 그대로 타므로 원본 DB 조회 횟수가 늘지 않는다. 조회 실패 시 `—`(판단 보류, 0으로 그리지 않음). 막대 기준(임계치)은 기존 DB별 세션 임계치 설정(`currentSessionThresholds`)을 그대로 쓴다.
+- **메모리 사용률 칸 (2026-09-25 오케스트레이터 요청 추가)**: 같은 `/lock/realtime` 응답의 `memoryPct`로 받는다. 메모리는 천천히 변하므로 서버가 DB별로 **60초 캐시**해 3초 주기마다 조회하지 않는다. 실패 시 `—`.
 
 탑바의 DB 상태 pill: 최근 10분 평균 부하율 기준 `0.7 미만 정상 / 1.0 미만 주의 / 1.0 이상 초과`, 최근 수집이 3분 이상 비어 있으면 `수집 실패`.
 
@@ -811,7 +815,7 @@ ORDER  BY cnt DESC;
 |---|---|---|---|
 | GET | `/api/metric_history` (**기존**) | `db_id`, `range`(15m/1h/3h/24h), `metrics` | ① ② : 분별 8분류 AAS(`ash_wc_*`) + 코어. range 키 `15m`/`3h`와 응답 필드 `dbClockOffsetMs` 추가 |
 | GET | `/api/dashboard/{dbId}/top` | `from`, `to` (DB 시각) | ⑤ ⑥ ⑦ : ASH 구간 집계 Top 3종 + `source`(ash/awr/mixed) + `dbNow`. ④ 진단은 ② 데이터로 화면에서 계산 |
-| GET | `/api/dashboard/{dbId}/lock/realtime` | - | ③ : TX/TM 건수, Holder 목록, 장애 여부 |
+| GET | `/api/dashboard/{dbId}/lock/realtime` | - | ③ : TX/TM 건수, Holder 목록, 장애 여부 + ① 활성 세션·메모리 칸의 `activeSessions`, `memoryPct` (2026-09-25 추가) |
 | GET | `/api/dashboard/{dbId}/session/{sid}/{serial}` | `from`, `to` | 6.1 세션 상세 |
 | GET | `/api/dashboard/{dbId}/sql/{sqlId}` | `from`, `to` | 6.2 SQL 상세 |
 | GET | `/api/dashboard/{dbId}/event` | `name`, `from`, `to` | 6.3 이벤트 상세 |

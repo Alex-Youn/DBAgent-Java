@@ -104,33 +104,35 @@
 
 ---
 
-## 4단계 — Lock 실시간 API + KILL API (백엔드)
+## 4단계 — Lock 실시간 API + KILL API (백엔드) ✅ 완료 (2026-09-25, 전체 순서 F2)
 
 ### 4-1. Lock 실시간
-- [ ] TX/TM 대기 건수 쿼리 (설계 5장 ③)
-- [ ] TM Holder 쿼리: `/*+ rule */`, 세션 단위 `GROUP BY sid, serial#`, **필터 없음**, `session_type`·`blocking_session`·`waiters`·`obj_cnt` 포함
-- [ ] 앱에서 분리: 장애 판정 수 = `last_call_et >= 프로퍼티` AND `blocking_session IS NULL` AND `waiters > 0`
-- [ ] 앱에서 분리: KILL 대상 = `session_type='USER'` 전체 (`blockingOnly`/`inactiveOnly` 설정 시에만 좁힘)
-- [ ] `obj_id` → 객체명은 캐시 (매 주기 `dba_objects` 조인 금지)
-- [ ] 쿼리 타임아웃 `lockQueryTimeoutSeconds`
-- [ ] DB별 결과 캐시(`2초`) + 진행 중 요청 공유(`failureProbInFlight` 패턴) → 보는 사람 수와 무관하게 주기당 1회
-- [ ] 타임아웃·실패 시 응답에 "판단 보류" 표시 (0으로 내려주지 않음)
-- [ ] `mon_lock_sample` 1분 요약 저장
-- [ ] 검증: 한 세션이 테이블 2개에 TM Lock → Holder 1개로 셈
-- [ ] 검증: 아무도 막지 않는 60초↑ Holder 여러 개 → 장애 아님
-- [ ] 검증: 같은 순간 `/api/failure_prob`의 `count`와 새 판정 수가 같음
+- [x] TX/TM 대기 건수 쿼리 (설계 5장 ③)
+- [x] TM Holder 쿼리: `/*+ rule */`, 세션 단위 `GROUP BY sid, serial#`, **필터 없음**, `session_type`·`blocking_session`·`waiters`·`obj_cnt` 포함
+- [x] 앱에서 분리: 장애 판정 수 = `last_call_et >= 프로퍼티` AND `blocking_session IS NULL` AND `waiters > 0`
+- [x] 앱에서 분리: KILL 대상 = `session_type='USER'` 전체 (`blockingOnly`/`inactiveOnly` 설정 시에만 좁힘)
+- [x] `obj_id` → 객체명은 캐시 (매 주기 `dba_objects` 조인 금지)
+- [x] 쿼리 타임아웃 `lockQueryTimeoutSeconds`
+- [x] DB별 결과 캐시(`2초`) + 진행 중 요청 공유(`failureProbInFlight` 패턴) → 보는 사람 수와 무관하게 주기당 1회
+- [x] 타임아웃·실패 시 응답에 "판단 보류" 표시 (0으로 내려주지 않음)
+- [x] `mon_lock_sample` 1분 요약 저장
+- [x] **(2026-09-25 추가)** 응답에 `activeSessions` — 기존 대시보드 활성 세션과 같은 정의(`status='ACTIVE'`, 백그라운드·username 없음·모니터링 계정 제외), 같은 커넥션·같은 캐시, 실패 시 판단 보류
+- [x] **(2026-09-25 추가)** 응답에 `memoryPct` — 기존 대시보드 메모리와 같은 정의((SGA+PGA 할당)/물리 메모리), DB별 60초 캐시
+- [x] 검증: 한 세션이 테이블 2개에 TM Lock → Holder 1개로 셈 (objCnt 2, "T1 외 1개")
+- [x] 검증: 아무도 막지 않는 60초↑ Holder 여러 개 → 장애 아님 (6개 → 판정 수 0)
+- [x] 검증: 같은 순간 `/api/failure_prob`의 `count`와 새 판정 수가 같음 (1=1, 6=6, main·AIX)
 
 ### 4-2. KILL API
-- [ ] `POST .../lock/tm-holders/kill`, 본문 `{dbId, targets:[{sid, serial}]}`, 경로·본문 dbId 불일치 시 400
-- [ ] 관리자 권한 + `canAccessDb` 둘 다 확인
-- [ ] 실행 직전 Holder 재조회 → 요청 대상과 `sid+serial#` 교집합만 KILL, 없어진 세션은 SKIPPED
-- [ ] `session_type='USER'` 서버 강제 (백그라운드 절대 KILL 불가)
-- [ ] `ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE` (`@inst_id` 없음), `sid`/`serial#`는 정수 파싱이 유일한 방어선
-- [ ] 결과 전부 `mon_kill_audit` 기록 (실행자, 인스턴스명, 결과, 오류)
-- [ ] 기존 `/api/kill_session`은 건드리지 않음 (새 화면은 새 API만 사용)
-- [ ] AIX 포팅
-- [ ] `security-reviewer` 검토
-- [ ] 커밋
+- [x] `POST .../lock/tm-holders/kill`, 본문 `{dbId, targets:[{sid, serial}]}`, 경로·본문 dbId 불일치 시 400
+- [x] 관리자 권한 + `canAccessDb` 둘 다 확인
+- [x] 실행 직전 Holder 재조회 → 요청 대상과 `sid+serial#` 교집합만 KILL, 없어진 세션은 SKIPPED
+- [x] `session_type='USER'` 서버 강제 (백그라운드 절대 KILL 불가)
+- [x] `ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE` (`@inst_id` 없음), `sid`/`serial#`는 정수 파싱이 유일한 방어선
+- [x] 결과 전부 `mon_kill_audit` 기록 (실행자, 인스턴스명, 결과, 오류)
+- [x] 기존 `/api/kill_session`은 건드리지 않음 (새 화면은 새 API만 사용)
+- [x] AIX 포팅
+- [x] `security-reviewer` 검토 — Critical/High 없음. 반영: 감사 저장 1회 재시도 + 실패 시 응답 `auditWriteFailed`, 예외 시에도 KILL 표시·캐시 무효화(finally). 참고: 재조회~KILL 사이 SID 재사용은 sid+serial 매칭으로 충분(Low)
+- [x] 커밋
 
 ---
 
@@ -172,6 +174,9 @@
 ## 7단계 — ① KPI · ② AAS 차트 · ④ 진단 배너
 
 - [ ] ① 4칸: 현재 AAS(`ash_wc_*` 합), 구간 평균, 최대(코어 대비 %), 코어 초과 분 수
+- [ ] **(2026-09-25 추가) ① 5번째 칸 "활성 세션"**: 숫자 + 아래 작은 가로 막대 1개(10칸 세그먼트, DB별 세션 임계치 5번째 값=가득, 기존 임계치 색) — 기존 대시보드 도넛형 대체. 리프레쉬 주기(3초)로 `/lock/realtime`의 `activeSessions` 사용, 실패 시 `—`
+- [ ] **(2026-09-25 추가) ① 6번째 칸 "메모리 사용률"**: 숫자(%) + 아래 작은 가로 막대 1개(10칸, 100%=가득, 80/90% 색) — 기존 대시보드 도넛형 대체. `/lock/realtime`의 `memoryPct`, 실패 시 `—`
+- [ ] 검증: 같은 순간 기존 대시보드 활성 세션·메모리 값과 일치, 6칸이 한 줄에 들어가는지(80% 배율·좁은 화면)
 - [ ] ② 8분류 누적 영역 SVG, 누적 순서·색 설계 2.3대로, CPU 코어 점선
 - [ ] "Oracle 대기 클래스 기준" 라벨 + 데이터 소스 라벨
 - [ ] 범례 토글 (전부 숨김 불가), 호버 크로스헤어·2열 툴팁
