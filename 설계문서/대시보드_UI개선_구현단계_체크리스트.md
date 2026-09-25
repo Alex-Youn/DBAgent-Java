@@ -71,20 +71,20 @@
 
 ---
 
-## 2단계 — 수집기 확장 (60초 샘플러, 백엔드)
+## 2단계 — 수집기 확장 (60초 샘플러, 백엔드) ✅ 구현·검증 완료 (2026-09-25, 전체 순서 C단계)
 
-- [ ] 7분류 CASE / 8분류 CASE를 공통 상수로 분리 (7분류: 샘플러·`getAshActivity()` 공유, 8분류: 샘플러·신규 `/top` 공유)
-- [ ] 샘플러 ASH 쿼리를 한 번 스캔으로 `cat7, cat8` 동시 집계하도록 변경 (설계 4.3 (1))
-- [ ] 기존 `ash_*` 7개 저장 유지 + 신규 `ash_wc_*` 8개 저장 (`ash_wc_cpu` ~ `ash_wc_other`)
-- [ ] cat7/cat8이 NULL인 행 처리 (각 합산에서만 제외)
-- [ ] 샘플러가 매 사이클 `SYSDATE`를 읽어 DB별 "DB 시각 − 앱 시각" 차이를 메모리 캐시
-- [ ] 앱 기동 시·신규 DB 등록 시 ASH로 최근 1시간 1분 버킷 backfill (`ash_wc_*`)
-- [ ] `/api/metric_history` range 키 `15m`, `30m`(Current Session 1-10용), `3h` 추가 (알 수 없는 range가 조용히 1h로 가는 현재 동작 유지 여부 확인)
-- [ ] `/api/metric_history` 응답에 `dbClockOffsetMs` 필드 추가 (원본 DB 추가 조회 없이 캐시 값)
-- [ ] AIX 포팅 (H2 저장 확인)
-- [ ] 검증: 같은 분의 `ash_*` 7개 합 = `ash_wc_*` 8개 합
-- [ ] 검증: Current Session 화면이 변경 전과 똑같이 동작
-- [ ] `query-performance-reviewer` 검토
+- [x] 7분류 CASE / 8분류 CASE를 공통 상수로 분리 (7분류: 샘플러·`getAshActivity()` 공유, 8분류: 샘플러·신규 `/top` 공유)
+- [x] 샘플러 ASH 쿼리를 한 번 스캔으로 `cat7, cat8` 동시 집계하도록 변경 (설계 4.3 (1))
+- [x] 기존 `ash_*` 7개 저장 유지 + 신규 `ash_wc_*` 8개 저장 (`ash_wc_cpu` ~ `ash_wc_other`)
+- [x] cat7/cat8이 NULL인 행 처리 (각 합산에서만 제외)
+- [x] 샘플러가 매 사이클 `SYSDATE`를 읽어 DB별 "DB 시각 − 앱 시각" 차이를 메모리 캐시
+- [x] 앱 기동 시·신규 DB 등록 시 ASH로 최근 1시간 1분 버킷 backfill (`ash_wc_*`)
+- [x] `/api/metric_history` range 키 `15m`, `30m`(Current Session 1-10용), `3h` 추가 (알 수 없는 range는 기존대로 1h - 유지, v2 화면 호환)
+- [x] `/api/metric_history` 응답에 `dbClockOffsetMs` 필드 추가 (원본 DB 추가 조회 없이 캐시 값)
+- [x] AIX 포팅 (H2 저장 확인)
+- [x] 검증: 같은 분의 `ash_*` 7개 합 = `ash_wc_*` 8개 합
+- [x] 검증: Current Session 화면이 변경 전과 똑같이 동작
+- [x] `query-performance-reviewer` 검토 (반영·이월 내역은 전체 작업순서 체크리스트 C단계)
 - [ ] 커밋
 
 ---
