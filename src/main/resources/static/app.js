@@ -4981,7 +4981,11 @@ let historySortAsc = true;
                 formattedAnswer = formattedAnswer.replace(/\n/g, '<br/>');
                 
                 let sourceHtml = "";
-                if (data.context_used) {
+                if (data.answer_mode === 'general') {
+                    // 체크리스트 6-1(2026-09-25): ORA 오류 코드가 없는 질문은 사내 오류 사전 검색 없이 AI 일반 지식으로
+                    // 답한다 - 근거 기반 답변(첨부 문서가 붙는 오류 질문)과 구분되도록 답변 끝에 출처 성격을 밝힌다.
+                    sourceHtml = `<div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); font-size: 0.82rem; color: var(--text-muted);">※ 사내 오류 사례가 아닌 AI 일반 지식으로 작성된 답변입니다. 버전·환경에 따라 다를 수 있으니 중요한 작업 전에는 확인하세요.</div>`;
+                } else if (data.context_used) {
                     // 사용자 피드백: 펼쳤을 때 글자가 너무 작고 잘 안 보인다. 0.8rem/text-muted 조합은
                     // 회색 위 회색이라 사실상 읽히지 않았다 - 토글 줄은 primary 색 굵은 글씨로 눈에 띄게 하고,
                     // 원문은 본문과 같은 0.95rem 에 본문 색(text-main)으로 올렸다. DB 에서 가져온 매뉴얼은
