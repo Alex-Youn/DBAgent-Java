@@ -65,9 +65,9 @@
 - [x] 검증 (메인 jar, dist 설정, 로컬 XE): `/api/ash_activity` `cpu_cores` 32 → **16**, 샘플러 `ash_cpu_cores` 새 샘플부터 **16**, 대시보드 CPU%는 기존 계산 그대로
 - [x] AIX 런타임 테스트 (2026-09-25 배포 ① 전, 코어 16 확인)
 - [x] 커밋 (메인 `998846a`, AIX `8d794da`)
-- [ ] AIX 포팅
-- [ ] 검증: v2 CPU%·Current Session 코어선이 새 코어 수 기준으로 표시
-- [ ] 커밋
+- [x] AIX 포팅
+- [x] 검증: v2 CPU%·Current Session 코어선이 새 코어 수 기준으로 표시 (A3, 코어 기준선만 NUM_CPU_CORES — CPU% 분모는 NUM_CPUS 유지 결정)
+- [x] 커밋 (A단계, 배포 ① 포함)
 
 ---
 
@@ -85,7 +85,7 @@
 - [x] 검증: 같은 분의 `ash_*` 7개 합 = `ash_wc_*` 8개 합
 - [x] 검증: Current Session 화면이 변경 전과 똑같이 동작
 - [x] `query-performance-reviewer` 검토 (반영·이월 내역은 전체 작업순서 체크리스트 C단계)
-- [ ] 커밋
+- [x] 커밋 (main 8b27c6d / AIX d00ae18, 배포 ③)
 
 ---
 
@@ -138,8 +138,8 @@
 
 - [ ] `ash_base` 공통 인라인 뷰 (8분류 CASE, FOREGROUND, 모니터링 계정 제외, `blocking_inst_id` 포함)
 - [ ] `/top`: Top SQL·세션·이벤트 5개씩 한 번에, AAS = 샘플 수 × 간격 ÷ 구간 초
-- [ ] 보관 범위 밖 구간: `MIN(sample_time)` 기준으로 `dba_hist_active_sess_history`(10초) 보충, 응답 `source: ash|awr|mixed`
-- [ ] 구간은 DB 시각 기준, 최대 24시간, 타임아웃 `ashActivityQueryTimeoutSeconds`
+- [x] 보관 범위 밖 구간: `MIN(sample_time)` 기준으로 `dba_hist_active_sess_history`(10초) 보충, 응답 `source: ash|awr|mixed` (D2, `AshRange`)
+- [x] 구간은 DB 시각 기준, 최대 24시간, 타임아웃 `ashActivityQueryTimeoutSeconds` (D1, AWR 섞이면 `ash-awr-query-timeout-seconds` 60초)
 - [ ] SQL 텍스트는 상위 5개만 `v$sqlstats`에서 조회, aged-out이면 "SQL 텍스트 없음"
 - [ ] 세션 상세 / SQL 상세 / 이벤트 상세 API (설계 6장)
 - [ ] 블로커가 다른 인스턴스면(`blocking_inst_id`/`blocking_instance` ≠ 접속 인스턴스) 로컬 조회하지 않고 표시만

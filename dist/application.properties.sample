@@ -97,6 +97,12 @@
 # 값이 없거나 잘못된 값이면 60 으로 동작한다.
 #dbagent.monitor.tm-holder-last-call-et-seconds=60
 
+# ASH 구간 조회(성능 분석·대시보드 Top 등)에서 ASH 인메모리 보관 범위를 벗어난 구간을
+# dba_hist_active_sess_history(AWR, 10초 간격)로 보충할지. Diagnostics Pack이 없는 사이트는 false (2026-09-25)
+#dbagent.monitor.ash-awr-fallback=true
+# AWR이 섞인 구간 조회의 타임아웃(초) - ASH만 쓰는 조회는 ash-activity-query-timeout-seconds
+#dbagent.monitor.ash-awr-query-timeout-seconds=60
+
 # ── RDB(MySQL / MariaDB / PostgreSQL / MS SQL Server / CUBRID) 커넥션 풀 ──
 # Oracle 풀과 완전히 분리된 별도 설정이라 위 dbagent.oracle.* 의 영향을 받지 않는다.
 #dbagent.rdb.connect-timeout-ms=2000
