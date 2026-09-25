@@ -38,6 +38,10 @@
 | 상태바 (인스턴스/리스너/Max Session/Max Process, 리프레쉬 주기, 수동 새로고침, 자동 갱신 중지) | **조회 구간 선택 버튼 추가** (15분/1시간/3시간/24시간) |
 | 상태바 아래 전체 (CPU/메모리/장애발생 가능성/활성 세션 게이지 4개, Active Session 목록/Top Event 목록 탭, 세션 테이블) | **전부 제거**하고 아래 8개 프레임으로 교체 |
 
+v2 대시보드와의 관계 (2026-09-25 결정): 우측 하단 전환 스위치는 **그대로 유지**한다. 스위치의 "기존" 자리에 이 새 화면이 들어가 **새 화면 / v2** 두 가지로 전환된다. 기존 게이지·탭 화면은 남기지 않는다. v2 화면·데이터 경로는 변경하지 않는다. 스위치 라벨과 마지막 선택값 저장 방식은 기존 구현을 따르고, 라벨만 "기존"에서 새 화면 이름으로 바꾼다.
+
+체크리스트와의 관계 (2026-09-25 결정): 대시보드의 Active Session 목록이 없어지므로 1-7(Duration 정렬)과 1-8(Remote 탭 추가)은 **Current Session 매뉴에만** 적용하고, 1-8의 대시보드 탭 구성 부분과 9-1(기존 대시보드 프레임 통합)은 이 설계로 대체되어 취소한다. 이 문서는 9-2(대시보드 그래프 개편)의 설계 문서다.
+
 ### 1.3 데이터 소스 원칙 (중요)
 
 - **Diagnostics Pack 보유를 전제로 ASH를 사용한다.** 기존 Current Session 메뉴(Active Session Wait Class 차트, Top SQL Activity Timeline, 세션 상세 팝업)와 60초 샘플러가 이미 `v$active_session_history`를 쓰고 있으므로 같은 소스·같은 분류로 맞춘다.
@@ -119,6 +123,22 @@
 - ③ Lock 차트: TX 선 색 = Application 색, TM 선 색 = Network 색(보라). TX/TM 실시간 구분은 ③ Lock 카드(선 색 + 상단 건수)가 맡는다.
 - 라이트 테마에서도 대비가 충분한지 확인하고, 부족하면 라이트용 값을 따로 둔다.
 - Current Session 메뉴의 7분류 색(`app.js`의 `ASH_ACTIVITY_CATEGORIES`)은 바꾸지 않는다.
+- 위 토큰은 새로 만들지 말고 기존 `style.css`의 테마 변수에 매핑한다. **라이트 테마 값도 함께 정의**한다 (앱은 `html[data-theme="light"]`로 라이트 테마를 전환하고 나머지는 CSS 변수로 따라감). 대기 클래스 색은 라이트 배경에서도 대비를 확인한다.
+
+### 2.4 폐쇄망·브라우저 제약 (필수)
+
+운영 환경은 외부 인터넷이 없는 폐쇄망(AIX 이관본 포함)이고, 브라우저 버전을 보장할 수 없다. 목업은 참고용이며 아래 항목은 목업과 다르게 구현한다.
+
+| 항목 | 목업 | 구현 |
+|---|---|---|
+| 폰트 | Google Fonts 로드 | **외부 폰트 금지.** 시스템 폰트 스택(`'Malgun Gothic', 'Segoe UI', sans-serif`, 숫자·SQL은 `Consolas, monospace`)과 기존 `style.css` 폰트를 쓴다. "1920×1040에서 스크롤 없음"은 이 실제 폰트로 다시 확인한다. |
+| `color-mix()` | 카드·배지 배경에 사용 | **쓰지 않는다** (Chrome 111+ 필요). 필요한 반투명 색은 `rgba()` 값으로 미리 계산해 토큰으로 둔다. |
+| `100dvh` | 전체 높이 | `100vh` + flex 레이아웃으로 대체 (`dvh`는 Chrome 108+). |
+| 차트 | SVG 직접 그림 | 그대로 SVG 직접 그림. 외부 차트 라이브러리·CDN을 추가하지 않는다. |
+| 클립보드 ("KILL 구문 복사", "조회 쿼리 복사") | `navigator.clipboard` | `navigator.clipboard`는 HTTPS/localhost에서만 동작하므로 폐쇄망 `http://IP:포트`에서는 실패한다. `textarea` + `document.execCommand('copy')`로 대체하고, 그것도 실패하면 텍스트를 선택 상태로 만들고 "Ctrl+C로 복사하세요"를 안내한다. |
+| 화면 배율 | 없음 | 앱의 `.app-container`에 `zoom: 90%`가 걸려 있다(`index.html`). `position:fixed` 요소가 zoom 컨테이너에 묶이는 버그 전례가 있으므로 **드로어·툴팁·오버레이는 `body` 바로 아래에 붙인다.** 차트의 포인터 좌표는 `getBoundingClientRect()` 기준 비율로 계산하고(목업 방식), zoom 90% 상태에서 호버·드래그 위치를 반드시 확인한다. zoom 값이 바뀌어도(체크리스트 4-1) 동작해야 한다. |
+
+- 백엔드는 AIX(Java 8)로 같이 포팅한다: `record`, `switch` 식, `List.of`/`Map.of`, `String.isBlank` 등을 쓰지 않거나 AIX 쪽 대체 유틸(`Maps.of` 등 기존 관례)로 바꾼다. 저장소 upsert 문법도 SQLite/H2가 다르다(4.2).
 
 ---
 
@@ -144,8 +164,11 @@
 | Top SQL/세션/이벤트 (⑤⑥⑦·드로어) | 수집 없음 | `v$active_session_history` (보관 범위 밖은 `dba_hist_active_sess_history`) | 저장하지 않음 — 선택 구간을 조회할 때 직접 집계 |
 | SQL 통계 델타 | 60초 | `v$sqlstats` | `MON_SQLSTAT_DELTA` |
 | Lock 실시간 | 리프레쉬 주기(기본 3초) | `v$session`, `v$lock` | 메모리(최근 10분) + `MON_LOCK_SAMPLE`(1분 요약) |
-| 점검 항목 (⑧) | 10분 | 5장 ⑧ 표 참조 | `MON_CHECK_RESULT` |
-| 세그먼트 크기 스냅샷 | 1일 1회 | `dba_segments` | `MON_SEGMENT_SIZE` (테이블 증가량 계산용) |
+| 점검 항목 (⑧) — 가벼운 항목 | 10분 | 테이블스페이스, FRA, TEMP, 스케줄러 잡 실패 (5장 ⑧ 표) | `MON_CHECK_RESULT` |
+| 점검 항목 (⑧) — 무거운 항목 | 1일 1회 (`check.dailyHour`, 기본 새벽 3시) | 테이블 용량, 무효 객체, 통계 오래됨 (5장 ⑧ 표) | `MON_CHECK_RESULT` |
+| 세그먼트 크기 스냅샷 | 1일 1회 (위와 같은 실행에서) | `dba_segments` | `MON_SEGMENT_SIZE` (테이블 증가량 계산용). 테이블 용량 점검과 **같은 `dba_segments` 조회 1번**의 결과를 함께 쓴다 |
+
+> 점검 주기를 나누는 이유: `dba_segments` 전체 GROUP BY, `dba_objects`, `dba_tab_statistics`는 딕셔너리 뷰 스캔이라 무겁고(기존 v2 대시보드가 딕셔너리 뷰 조인으로 운영 장애를 겪은 전례, `InstanceMetricSamplerService` 주석 참고), 값이 하루에 크게 바뀌지 않는다. 앱 기동 직후에는 1일 항목을 한 번 즉시 실행해 빈 화면을 막는다(이후는 매일 정해진 시각).
 
 > 자체 세션 샘플 테이블을 두지 않는 이유: ASH가 이미 활성 세션을 1초마다 샘플링해 SQL·세션·이벤트별 드릴다운에 필요한 컬럼을 모두 갖고 있다. 같은 데이터를 10초마다 복제 저장하면 인스턴스 11개 기준 하루 수백만 행이 SQLite/H2 저장소에 쌓여 쓰기 락·파일 비대화 위험만 생긴다.
 >
@@ -162,7 +185,7 @@ CREATE TABLE MON_SQLSTAT_DELTA (
   DB_ID            VARCHAR2(30)  NOT NULL,
   COLLECT_TS       DATE          NOT NULL,
   SQL_ID           VARCHAR2(13)  NOT NULL,
-  PLAN_HASH_VALUE  NUMBER,
+  PLAN_HASH_VALUE  NUMBER        NOT NULL,  -- v$sqlstats는 (sql_id, plan_hash_value) 단위라 PK에 포함
   EXECUTIONS_D     NUMBER,
   ELAPSED_US_D     NUMBER,
   CPU_US_D         NUMBER,
@@ -170,7 +193,7 @@ CREATE TABLE MON_SQLSTAT_DELTA (
   DISK_READS_D     NUMBER,
   ROWS_D           NUMBER,
   SQL_TEXT         VARCHAR2(1000),         -- 앞부분만, 전문은 조회 시 v$sql
-  CONSTRAINT PK_MON_SQLSTAT_DELTA PRIMARY KEY (DB_ID, COLLECT_TS, SQL_ID)
+  CONSTRAINT PK_MON_SQLSTAT_DELTA PRIMARY KEY (DB_ID, COLLECT_TS, SQL_ID, PLAN_HASH_VALUE)
 );
 
 -- ③ Lock 1분 요약 (실시간 값은 메모리)
@@ -179,7 +202,7 @@ CREATE TABLE MON_LOCK_SAMPLE (
   COLLECT_TS         DATE         NOT NULL,
   TX_WAIT_MAX        NUMBER,
   TM_WAIT_MAX        NUMBER,
-  TM_HOLDER_OVER_MAX NUMBER,               -- last_call_et 기준 초과 Holder 수 최대값
+  TM_HOLDER_OVER_MAX NUMBER,               -- 장애 판정 수(60초↑ 블로킹 TM Holder, ③-1 기준)의 1분 내 최대값
   INCIDENT_YN        CHAR(1),
   CONSTRAINT PK_MON_LOCK_SAMPLE PRIMARY KEY (DB_ID, COLLECT_TS)
 );
@@ -209,7 +232,7 @@ CREATE TABLE MON_CHECK_RESULT (
   CHECK_TS     DATE           NOT NULL,
   CHECK_TYPE   VARCHAR2(30)   NOT NULL,   -- TABLESPACE / TABLE_SIZE / FRA / TEMP / JOB_FAIL / INVALID_OBJ / STALE_STATS
   TARGET_NAME  VARCHAR2(261)  NOT NULL,   -- 테이블스페이스명, OWNER.TABLE, 잡 이름 등
-  SEVERITY     VARCHAR2(10)   NOT NULL,   -- CRIT / WARN / INFO
+  SEVERITY     VARCHAR2(10)   NOT NULL,   -- CRIT / WARN / INFO / OK(점검 완료·이상 없음, target_name='*') / ERROR(점검 실패)
   METRIC_VALUE NUMBER,                    -- 사용률(%), 크기(GB), 건수
   THRESHOLD    NUMBER,
   DETAIL_JSON  CLOB,                      -- 카드 보조 문구·상세 표시용 값
@@ -319,7 +342,11 @@ FROM   v$sqlstats
 WHERE  last_active_time >= SYSDATE - 2/1440;
 ```
 
-- 누적값이므로 애플리케이션에서 이전 수집값과의 차이(델타)를 계산해 저장한다. 커서가 aged-out 되었다가 다시 올라오면 음수가 나올 수 있으니 음수는 현재값으로 대체한다.
+- 누적값이므로 애플리케이션에서 `(db_id, sql_id, plan_hash_value)`별 이전 수집값(메모리)과의 차이(델타)를 계산해 저장한다.
+- **첫 관측은 기준값으로만 쓰고 저장하지 않는다**: 앱 재기동 직후나 새로 보인 SQL은 이전값이 없으므로, 누적값 전체를 델타로 넣으면 그 1분에 급등값이 찍힌다. 이전값을 메모리에 기록만 하고 다음 수집부터 델타를 저장한다.
+- **델타가 음수면 그 1분은 버리고 기준값만 갱신한다**: 커서가 aged-out 되었다가 다시 올라와 누적값이 리셋된 경우다. 현재값으로 대체하면 리셋 이후 누적분 전체가 1분에 몰려 급등값이 된다.
+- 델타가 모두 0인 행(1분 동안 실행 안 됨)은 저장하지 않는다.
+- 조회 창(`last_active_time >= SYSDATE - 2/1440`)은 60초 샘플러의 주기 지연을 흡수하기 위한 여유다. 이 창에서 빠진 SQL의 이전값은 10분 동안 보이지 않으면 메모리에서 지운다.
 
 ---
 
@@ -372,11 +399,11 @@ GET /api/metric_history?db_id=..&range=15m|1h|3h|24h
 |---|---|
 | TX 대기 세션 | 0 정상 / 1~4 주의 / **5 이상 위험** |
 | TM 대기 세션 | 0 정상 / 1~2 주의 / **3 이상 위험** |
-| TM Holder (60초↑) | `n / 6개`, 3개 이상 주의("기준까지 n개"), **6개 이상 "장애 기준 도달"** |
+| 블로킹 TM Holder (60초↑) | 장애 판정 수(③-1 기준). `n / 6개`, 3개 이상 주의("기준까지 n개"), **6개 이상 "장애 기준 도달"**. 보조 문구에 `전체 Holder m개` |
 | 최장 last_call_et | TM Holder 중 최댓값, 30초 주의 / 60초 위험 |
 
 - 차트: 계단형 선(step) 2개 (TX, TM), TX는 옅은 면 채움. 경고 기준 5건 점선. 오른쪽 끝에 현재값 직접 라벨 (`TX 14`, `TM 12`).
-- 범례 줄 오른쪽에 장애 기준 문구 표시: `장애 기준: last_call_et 60초↑ TM Holder 6개↑`.
+- 범례 줄 오른쪽에 장애 기준 문구 표시: `장애 기준: 60초↑ 블로킹 TM Holder 6개↑`.
 - 장애 조건이 성립했던 시간대는 차트 배경을 붉게 칠한다. KILL 실행 시각은 붉은 세로선 + "KILL" 라벨.
 
 ```sql
@@ -387,30 +414,50 @@ FROM   v$session
 WHERE  state = 'WAITING'
 AND    (event LIKE 'enq: TX%' OR event LIKE 'enq: TM%');
 
--- TM Lock Holder (리프레쉬 주기마다)
-SELECT s.sid, s.serial#, s.username, s.program, s.machine, s.status,
-       s.last_call_et, l.id1 AS obj_id, l.lmode, l.block,
+-- TM Lock Holder (리프레쉬 주기마다) — 세션 단위로 1행 (DISTINCT)
+SELECT /*+ rule */
+       s.sid, s.serial#, MAX(s.type) AS session_type,
+       MAX(s.username) AS username, MAX(s.program) AS program,
+       MAX(s.machine) AS machine, MAX(s.status) AS status, MAX(s.last_call_et) AS last_call_et,
+       MAX(s.blocking_session) AS blocking_session,   -- 장애 판정: 자기가 막혀 있으면 제외
+       MIN(l.id1)  AS obj_id,          -- 대표 객체 1개 (여러 개면 obj_cnt로 "외 n개" 표시)
+       COUNT(DISTINCT l.id1) AS obj_cnt,
+       MAX(l.block) AS block,
        (SELECT COUNT(*) FROM v$session w WHERE w.blocking_session = s.sid) AS waiters
 FROM   v$lock l
 JOIN   v$session s ON s.sid = l.sid
 WHERE  l.type  = 'TM'
 AND    l.lmode > 0
-AND    s.type  = 'USER'                -- 백그라운드·SYS 세션은 절대 대상에 넣지 않는다
-AND    s.last_call_et >= :lce_sec      -- 기본 60
-AND    (:blocking_only = 0 OR l.block > 0);
+GROUP  BY s.sid, s.serial#;
 ```
 
+- **세션 단위 집계(필수)**: 한 세션이 여러 테이블에 TM Lock을 잡으면 `v$lock`에 행이 여러 개 나온다. 행 수로 세면 Holder 수가 부풀어 **장애 판정이 오탐**하므로 반드시 `sid, serial#`로 묶는다.
+- **한 번 조회해서 두 가지로 나눠 쓴다** (쿼리에는 필터를 넣지 않는다):
+  - **장애 판정 수** (③-1, v2 `getFailureProb()`와 같은 규칙): `last_call_et >= tmHolder.lastCallEtSec` AND `blocking_session IS NULL` AND `waiters > 0`인 행의 수. v2 쿼리처럼 세션 종류로 거르지 않는다.
+  - **KILL 대상 목록** (③-1 결정: Holder 전체): `session_type = 'USER'`인 행 전체. 설정 `tmHolder.blockingOnly`/`inactiveOnly`가 켜져 있으면 여기서만 `block > 0`/`status = 'INACTIVE'`로 좁힌다. 백그라운드 세션은 목록에도 넣지 않는다.
+- 장애 판정 수가 v2 화면(`/api/failure_prob`의 `count`)과 같은 순간 같은 값이어야 한다. 구현 후 같은 DB에서 두 값을 비교해 확인한다.
+- `/*+ rule */`은 기존 `getFailureProb()`가 폐쇄망에서 검증된 방식 그대로다 (v$lock 조인이 느린 환경 대응).
+- **부하 제어 (필수)**:
+  - 쿼리 타임아웃은 기존 `lockQueryTimeoutSeconds`를 쓴다 (v$lock 스캔 49초 실측 전례).
+  - 서버는 DB별로 결과를 `lock.refreshSecMin`(2초) 동안 캐시하고, 같은 DB에 대한 요청이 진행 중이면 새 조회를 띄우지 않고 그 결과를 기다린다 (기존 `failureProbInFlight` 패턴). 보는 사람이 여러 명이어도 원본 DB 조회는 주기당 1회다.
+  - 조회가 타임아웃·실패하면 직전 값을 "판단 보류"로 표시하고 0으로 그리지 않는다 (5장 상태 정의 참조).
 - TX만 row lock으로 좁히려면 `event = 'enq: TX - row lock contention'` 사용 (설정값).
-- `obj_id` → 객체명은 `dba_objects`를 매 주기 조인하지 말고 수집기에서 캐시한다.
+- `obj_id` → 객체명은 `dba_objects`를 매 주기 조인하지 말고 수집기에서 캐시한다 (11g에서 딕셔너리 뷰 조인으로 무응답 블로킹된 전례, `getFailureProb()` 주석 참고).
 - RAC: `v$lock`, `v$session`만 사용(접속 인스턴스 기준, `inst_id` 미사용 — 2026-09-06 gv$ 미사용 원칙).
 
 ### ③-1 TM Lock 장애 처리
 
-**장애 조건**: `last_call_et ≥ 60초`인 TM Lock Holder가 **6개 이상** (둘 다 설정값).
+**장애 조건** (2026-09-25 결정 — **기존 v2 대시보드 `getFailureProb()`와 같은 기준**): 아래를 모두 만족하는 **블로킹 TM Holder**가 **6개 이상** (60초·6개는 설정값).
+- TM Lock을 잡고 있고(`v$lock.type='TM'`, `lmode > 0`)
+- `last_call_et ≥ 60초`
+- 자기는 다른 세션에 막혀 있지 않고(`blocking_session IS NULL`)
+- 실제로 다른 세션을 막고 있다(`waiters > 0`, 즉 `v$session.blocking_session = 이 SID`인 세션이 있음)
+
+커밋하지 않고 오래 도는 정상 배치처럼 **아무도 막지 않는 Holder는 판정 수에 넣지 않는다** (잘못된 경보 방지). v2와 새 화면을 스위치로 오가므로 같은 순간에 한쪽만 장애로 뜨지 않도록 기준을 하나로 맞춘다. **KILL 대상은 판정 기준과 별개로 TM Lock Holder 전체**다 (아래 결정).
 
 조건 충족 시:
 1. ③ 카드 전체가 붉게 바뀌고(테두리·배경·은은한 깜빡임, `prefers-reduced-motion`이면 깜빡임 없음), 카드 상단에 붉은 알림 바 표시:
-   `TM Lock 장애 감지 — last_call_et 60초 이상 TM Lock Holder n개 · 기준 6개 이상 · 전체 Holder m개`
+   `TM Lock 장애 감지 — 60초 이상 다른 세션을 막고 있는 TM Lock Holder n개 · 기준 6개 이상 · 전체 Holder m개`
 2. 알림 바에 **"장애 처리 · TM Holder m개 KILL"** 버튼.
 3. 버튼 클릭 → 카드 안에 확인 패널(모달 대신 인라인):
    - 대상 목록: 체크박스(기본 전체 선택), SID,SERIAL#, 사용자·프로그램, 잠금 객체, last_call_et(60초 미만은 "60초 미만" 표시), 막고 있는 세션 수
@@ -421,16 +468,25 @@ AND    (:blocking_only = 0 OR l.block > 0);
    - 세션별로 `ALTER SYSTEM KILL SESSION 'sid,serial#' IMMEDIATE`. RAC라도 `@inst_id`를 붙이지 않는다 — 대상은 모두 접속 인스턴스의 `v$lock`/`v$session`에서 찾은 세션이므로 같은 커넥션에서 실행한다.
    - 모든 결과를 `MON_KILL_AUDIT`에 저장.
    - 완료 후 카드 아래에 처리 기록 1줄 표시: `hh:mm:ss 장애 처리 완료 · TM Lock Holder n개 세션 KILL (SID …)`.
-5. 조건이 해소되면 카드는 정상 표시로 돌아가고, 열려 있던 확인 패널은 닫힌다.
+5. 조건이 해소되면 카드는 정상 표시로 돌아간다. **열려 있던 확인 패널은 자동으로 닫지 않는다** (2026-09-25 결정):
+   - 패널 상단에 `장애 조건 해소됨 (현재 블로킹 Holder n개)` 안내를 표시하고, 조건이 다시 성립하면 안내만 사라진다. 패널 자체는 열리고 닫히지 않는다 (값이 기준 근처에서 오르내려도 깜빡이지 않게).
+   - 대상 목록은 매 주기 갱신한다. 이미 종료된 세션은 목록에 `종료됨`으로 표시하고 체크박스를 비활성화한다. 새로 생긴 Holder는 목록 아래에 추가하되 **자동으로 체크하지 않는다** (운영자가 본 적 없는 세션이 KILL되지 않게).
+   - KILL 여부는 운영자가 판단하고, 패널은 `취소`/`KILL 실행`/Esc로만 닫힌다. 실행 시에는 4번의 재조회 규칙이 그대로 적용된다.
+6. **DB 전환 시 오전송 방지 (필수)**:
+   - 확인 패널을 여는 순간의 `db_id`를 패널에 고정하고, KILL 요청 본문에 그 `db_id`를 담는다. 클릭 시점의 "현재 선택 DB" 전역값을 읽지 않는다.
+   - 패널이 열린 상태에서 사이드바로 DB를 바꾸면 패널을 닫는다 (다른 DB의 대상 목록을 새 DB 화면 위에 남기지 않는다).
+   - 서버는 요청의 `db_id`로만 커넥션을 잡아 재조회하고, 그 결과와 요청 대상의 교집합(`sid`+`serial#` 일치)만 KILL한다. `canAccessDb` + 관리자 권한을 모두 확인한다.
 
 **보안·안전 요건 (필수)**
 - KILL 버튼은 관리자 권한 사용자에게만 표시.
 - 수집 계정과 KILL 계정을 분리하는 것을 권장 (KILL 계정만 `ALTER SYSTEM` 권한).
 - `s.type = 'USER'` 조건은 제거 불가. 백그라운드 프로세스 KILL은 인스턴스 장애로 이어진다.
 
-> **결정 필요 — KILL 대상 범위**
-> 요구사항은 "TM Lock Holder 모두 KILL"이다. 그러나 INSERT/UPDATE/DELETE를 하고 커밋 전인 세션은 모두 TM Lock(SX)을 잡고 있으므로, 조건 없이 전부 KILL하면 정상 배치·긴 트랜잭션까지 죽일 수 있다.
-> 설정값 `tmHolder.blockingOnly`로 제공하고, 기본값은 요구사항대로 `false`(전체)로 둔다. **실제로 다른 세션을 막고 있는 Holder만(`l.block > 0`) 대상으로 하는 `true`를 권장**한다. 추가로 `s.status = 'INACTIVE'` 조건을 걸면 "커밋하지 않고 멈춘 세션"만 남아 오탐이 가장 적다.
+> **결정 (2026-09-25 오케스트레이터) — KILL 대상 범위: TM Lock Holder 전체**
+> 장애 조건(60초 이상 블로킹 TM Holder 6개 이상)에 도달한 시점이면 운영 경험상 업무가 거의 마비된 상태이므로, 빠른 복구를 우선해 **TM Lock Holder 전체를 KILL 대상으로 하고 확인 패널은 기본 전체 선택**으로 둔다 (60초 미만 Holder 포함, 목록에는 "60초 미만"으로 표시).
+> - 커밋 전 정상 배치·긴 트랜잭션도 대상에 들어갈 수 있다는 점은 감수한다. 운영자는 확인 패널에서 체크를 해제해 개별 제외할 수 있다.
+> - 설정값 `tmHolder.blockingOnly`(기본 `false`), `tmHolder.inactiveOnly`(기본 `false`)는 남겨 두어, 운영 환경에 따라 대상을 좁힐 수 있게 한다.
+> - `s.type = 'USER'` 고정, 실행 직전 재조회, 감사 기록은 그대로 필수다.
 
 ### ④ 진단 배너
 
@@ -497,7 +553,7 @@ SELECT * FROM (
 
 ### ⑧ 점검 알림
 
-대시보드 맨 아래 **가로 한 줄** 프레임. 임계치를 넘은 점검 항목을 카드로 나열해서, 운영자가 점검·조치를 요청받는 창구로 쓴다. 실시간이 아니라 **10분 주기** 점검 결과를 보여준다.
+대시보드 맨 아래 **가로 한 줄** 프레임. 임계치를 넘은 점검 항목을 카드로 나열해서, 운영자가 점검·조치를 요청받는 창구로 쓴다. 실시간이 아니라 **주기 점검** 결과를 보여준다 (가벼운 항목 10분, 무거운 항목 1일 — 4.1 참조).
 
 **헤더**: `점검 알림` + 심각도별 건수(`■ 위험 2 · ▲ 주의 4 · ○ 확인 2`) + `마지막 점검 hh:mm · 10분 주기` + 필터 세그먼트 `전체 / 위험 / 주의 / 확인`.
 
@@ -505,22 +561,24 @@ SELECT * FROM (
 - 1행: 심각도 pill + 항목 종류 (예: `위험 · 테이블스페이스`)
 - 2행: 대상 이름(mono, 말줄임) + 값 (예: `APP_DATA  92.4%`)
 - 3행: 사용률/크기 항목만 게이지 막대 + 임계치 눈금
-- 4행: 보조 문구 한 줄 (예: `412.3 / 446.0 GB · 여유 33.7 GB · 약 16일 후 가득 참`)
+- 4행: 보조 문구 한 줄 (예: `438.9 / 446.0 GB · 여유 7.1 GB · 약 3일 후 가득 참`)
 - 왼쪽 테두리 색 = 심각도. 위험 카드는 배경도 옅게 붉다.
 - 카드가 화면 폭보다 많으면 **프레임 안에서만** 가로 스크롤.
 - 카드 클릭 → 상세 드로어 (6.4).
 
 **점검 항목과 기준 (설정값)**
 
-| 항목 | 주의 | 위험 | 소스 |
-|---|---|---|---|
-| 테이블스페이스 사용률 | 85% | 90% | `dba_tablespace_usage_metrics` (autoextend MAXSIZE 기준 사용률) |
-| 테이블 용량 | 30 GB | 40 GB | `dba_segments` + 증가량은 `MON_SEGMENT_SIZE` |
-| FRA 사용률 (회수 가능 제외) | 80% | 90% | `v$recovery_file_dest`, `v$recovery_area_usage` |
-| TEMP 사용률 | 75% | 90% | `v$sort_segment`, `v$tempseg_usage` |
-| 스케줄러 잡 실패 | 1회 | 2회 연속 | `dba_scheduler_job_run_details` |
-| 무효 객체 | 1개 이상 (확인) | — | `dba_objects` |
-| 통계 정보 오래됨 | 1개 이상 (확인) | — | `dba_tab_statistics` |
+| 항목 | 주의 | 위험 | 주기 | 소스 |
+|---|---|---|---|---|
+| 테이블스페이스 사용률 | **97%** | **98%** | 10분 | `dba_tablespace_usage_metrics` (autoextend MAXSIZE 기준 사용률). 2026-09-25 결정 — v2 대시보드 기준(97%)과 맞춤 |
+| 테이블 용량 | 30 GB | 40 GB | 1일 | `dba_segments` + 증가량은 `MON_SEGMENT_SIZE` |
+| FRA 사용률 (회수 가능 제외) | 80% | 90% | 10분 | `v$recovery_file_dest` (FRA 미설정 DB는 점검 제외), `v$recovery_area_usage` |
+| TEMP 사용률 | 75% | 90% | 10분 | `dba_temp_free_space`(사용량) + `dba_temp_files`(autoextend MAXSIZE 기준 최대 크기) |
+| 스케줄러 잡 실패 | 1회 | 2회 연속 | 10분 | `dba_scheduler_job_run_details` |
+| 무효 객체 | 1개 이상 (확인) | — | 1일 | `dba_objects` |
+| 통계 정보 오래됨 | 1개 이상 (확인) | — | 1일 | `dba_tab_statistics` |
+
+- 카드 1행 오른쪽에 항목별 마지막 점검 시각을 작게 표시한다 (`10분 주기 · hh:mm` / `1일 주기 · 03:00`). 헤더의 `마지막 점검`은 10분 항목 기준이다.
 
 > ⑧ 점검 소스는 모두 기본 제공 뷰다. 테이블 증가 추이는 `dba_hist_seg_stat`(AWR 보관 기간·스냅샷 대상 세그먼트에 따라 누락이 있음) 대신 `MON_SEGMENT_SIZE` 일 스냅샷 차이로 계산한다.
 
@@ -547,19 +605,27 @@ GROUP  BY owner, segment_name
 HAVING SUM(bytes) >= :warn_gb * POWER(1024,3)
 ORDER  BY size_gb DESC;
 
--- FRA
+-- FRA (FRA를 설정하지 않은 DB는 space_limit = 0 → 행을 제외해 ORA-01476(0으로 나누기)을 막는다)
 SELECT name,
-       ROUND(space_limit / POWER(1024,3))                             AS limit_gb,
-       ROUND(space_used  / POWER(1024,3))                             AS used_gb,
-       ROUND((space_used - space_reclaimable) / space_limit * 100, 1) AS used_pct
-FROM   v$recovery_file_dest;
+       ROUND(space_limit / POWER(1024,3))                                         AS limit_gb,
+       ROUND(space_used  / POWER(1024,3))                                         AS used_gb,
+       ROUND((space_used - space_reclaimable) / NULLIF(space_limit, 0) * 100, 1)  AS used_pct
+FROM   v$recovery_file_dest
+WHERE  space_limit > 0;
+-- 결과가 0행이면 "FRA 미설정"으로 보고 카드를 만들지 않는다 (오류·위험으로 표시하지 않음).
 
--- TEMP
-SELECT s.tablespace_name,
-       ROUND(s.used_blocks  * t.block_size / POWER(1024,3), 1) AS used_gb,
-       ROUND(s.total_blocks * t.block_size / POWER(1024,3), 1) AS total_gb
-FROM   v$sort_segment s
-JOIN   dba_tablespaces t ON t.tablespace_name = s.tablespace_name;
+-- TEMP (v$sort_segment.total_blocks는 지금까지 할당된 정렬 세그먼트 크기일 뿐 최대 크기가 아니라서 쓰지 않는다)
+SELECT f.tablespace_name,
+       ROUND((f.tablespace_size - f.free_space) / POWER(1024,3), 1)           AS used_gb,
+       ROUND(m.max_bytes / POWER(1024,3), 1)                                  AS max_gb,
+       ROUND((f.tablespace_size - f.free_space) / NULLIF(m.max_bytes, 0) * 100, 1) AS used_pct
+FROM   dba_temp_free_space f
+JOIN  (SELECT tablespace_name,
+              SUM(CASE WHEN autoextensible = 'YES' THEN GREATEST(maxbytes, bytes) ELSE bytes END) AS max_bytes
+       FROM   dba_temp_files
+       GROUP  BY tablespace_name) m
+  ON   m.tablespace_name = f.tablespace_name;
+-- 드로어(6.4) "관련 객체"의 TEMP 사용 세션·SQL은 v$tempseg_usage에서 따로 조회한다.
 
 -- 스케줄러 잡 실패 (최근 24시간)
 SELECT owner, job_name, status, actual_start_date, error#, additional_info
@@ -580,16 +646,44 @@ FROM   dba_tab_statistics
 WHERE  stale_stats = 'YES'
 AND    owner NOT IN ('SYS','SYSTEM','AUDSYS','XDB','MDSYS','CTXSYS');
 
--- 화면 조회 (최신 점검 결과)
-SELECT check_type, target_name, severity, metric_value, threshold, detail_json, check_ts
-FROM   MON_CHECK_RESULT
-WHERE  db_id = :db_id
-AND    check_ts = (SELECT MAX(check_ts) FROM MON_CHECK_RESULT WHERE db_id = :db_id)
-ORDER  BY DECODE(severity, 'CRIT', 0, 'WARN', 1, 2), metric_value DESC;
+-- 화면 조회 (항목 종류별 최신 점검 결과) — 저장소(SQLite/H2) 쿼리
+-- 10분 항목과 1일 항목의 check_ts가 다르므로 전체 MAX(check_ts)가 아니라 check_type별 MAX를 쓴다.
+SELECT r.check_type, r.target_name, r.severity, r.metric_value, r.threshold, r.detail_json, r.check_ts
+FROM   mon_check_result r
+JOIN  (SELECT check_type, MAX(check_ts) AS last_ts
+       FROM   mon_check_result
+       WHERE  db_id = :db_id
+       GROUP  BY check_type) x
+  ON   x.check_type = r.check_type AND x.last_ts = r.check_ts
+WHERE  r.db_id = :db_id
+ORDER  BY CASE r.severity WHEN 'CRIT' THEN 0 WHEN 'WARN' THEN 1 ELSE 2 END, r.metric_value DESC;
 ```
+
+- 점검이 정상(임계치 미만)이면 해당 항목 행을 남기지 않는다. 대신 "이 항목을 점검했다"는 기록이 있어야 카드가 사라진 이유(해소 vs 점검 실패)를 구분할 수 있으므로, 점검 실행마다 항목 종류별로 `severity='OK'`, `target_name='*'` 행을 1개 남긴다. 화면은 `OK` 행을 카드로 그리지 않고 마지막 점검 시각 표시에만 쓴다.
+- 점검 쿼리가 실패(권한 없음, 타임아웃)하면 그 항목은 `severity='ERROR'` 행과 오류 메시지를 남기고, 화면은 `점검 실패 · 항목명` 카드(회색)로 표시한다. 실패를 "알림 없음"으로 보이게 하지 않는다.
 
 - 시스템 스키마 제외 목록은 설정값으로 둔다.
 - `dba_*` 뷰 조회 권한(`SELECT_CATALOG_ROLE` 또는 개별 GRANT)이 수집 계정에 있어야 한다.
+
+### 화면 상태 정의 (프레임 아님 — ①~⑧ 공통 규칙, 필수)
+
+값이 없거나 실패한 상황을 **"정상·0"으로 보이게 하지 않는 것**이 원칙이다. 빈 차트나 0을 정상처럼 그리면 장애를 놓친다.
+
+| 상태 | 판정 | 표시 |
+|---|---|---|
+| 첫 로딩 | 탭 진입·DB 선택 직후, 응답 전 | 프레임별 **스켈레톤**(회색 블록 + 차트 축·격자만)을 즉시 그린다. 검은 빈 화면을 두지 않는다 (체크리스트 1-2 불만 사항). |
+| DB 전환 중 | 사이드바에서 다른 DB 선택 | 진행 중인 요청을 모두 취소(`AbortController`)하고 DB 세대 번호를 올린다. 이전 DB 응답이 늦게 도착하면 세대 번호가 달라 버린다. 화면은 스켈레톤으로 바꾸고 열린 드로어·KILL 확인 패널은 닫는다. (체크리스트 1-5 "DB 이동 후 갱신 지연·검은 화면" 대응) |
+| 데이터 공백 | 신규 DB 등록·앱 재기동 직후, 수집 전 구간 | ② 차트는 값이 없는 분을 **0으로 잇지 않고 끊어서** 그리고, 공백 구간에 `수집 이전`을 옅게 표시. ① KPI는 계산 가능한 값만 표시하고 나머지는 `—`. |
+| 수집 지연 | 가장 최근 수집 시각이 3분 이상 지남 | ①② 카드 제목 옆에 `수집 지연 · 마지막 hh:mm` 배지, 탑바 상태 pill은 `수집 실패`. |
+| 접속 실패 | 대상 DB 연결 불가 | 탑바 pill `수집 실패` + ORA 메시지(툴팁). ③은 `연결 실패`, ⑤⑥⑦은 오류 문구 + `다시 시도` 버튼. |
+| ③ 판단 보류 | Lock 조회 타임아웃·실패, `/api/failure_prob` 503 | 직전 값을 흐리게 유지하고 `판단 보류 · 조회 지연`을 표시. 차트에 0을 찍지 않고 그 구간을 끊는다. 장애 표시(붉은 카드)는 켜거나 끄지 않고 직전 상태를 유지한다. **판단 보류 중에는 KILL 실행 버튼을 비활성화**한다 (서버 재조회도 같은 이유로 실패할 수 있으므로). |
+| ASH 조회 실패 | ⑤⑥⑦·드로어 ASH 쿼리 오류(권한 없음 ORA-00942, 타임아웃) | 해당 패널에 `ASH 조회 실패 — 권한 또는 조회 시간 초과` + 오류 코드. 다른 프레임은 그대로 동작. |
+| 빈 결과 | 선택 구간에 활성 세션 없음 | ⑤⑥⑦에 `선택 구간에 활성 세션이 없습니다`. ④ 진단 배너는 `선택 구간 평균 AAS 0 — 부하 없음`. |
+| DB 권한 없음 | `canAccessDb` 실패(403) | 대시보드 영역 전체에 `이 DB를 조회할 권한이 없습니다` 한 줄만 표시. 다른 프레임을 그리지 않는다. |
+| 비관리자 + 장애 | 장애 조건 성립, 관리자 아님 | 붉은 알림 바는 그대로 보이고, KILL 버튼 자리에 `장애 처리는 관리자만 할 수 있습니다` 안내. 드로어의 `KILL 구문 복사`도 숨긴다. |
+| 비Oracle DB | MySQL/MariaDB/MSSQL/PostgreSQL 선택 | 이 대시보드와 전환 스위치를 표시하지 않고, 기존 RDB 대시보드를 그대로 보여준다 (RDB 쪽은 변경 없음). |
+| ⑧ 점검 실패 | 점검 쿼리 권한 없음·타임아웃 (`severity='ERROR'`) | 회색 `점검 실패 · 항목명` 카드 + 오류 메시지. 헤더 건수에 `실패 n` 추가. |
+| 화면 숨김 | 다른 탭으로 이동, 브라우저 탭 숨김(`document.hidden`) | 모든 폴링을 멈추고, 다시 보이면 즉시 1회 갱신 후 재개한다. "자동 갱신 중지" 상태면 재개하지 않는다. |
 
 ---
 
@@ -720,7 +814,7 @@ ORDER  BY cnt DESC;
 | GET | `/api/dashboard/{dbId}/session/{sid}/{serial}` | `from`, `to` | 6.1 세션 상세 |
 | GET | `/api/dashboard/{dbId}/sql/{sqlId}` | `from`, `to` | 6.2 SQL 상세 |
 | GET | `/api/dashboard/{dbId}/event` | `name`, `from`, `to` | 6.3 이벤트 상세 |
-| POST | `/api/dashboard/{dbId}/lock/tm-holders/kill` | body: `[{sid, serial}]` | ③-1 장애 처리 (관리자 전용, 재조회 후 KILL, 감사 기록) |
+| POST | `/api/dashboard/{dbId}/lock/tm-holders/kill` | body: `{dbId, targets: [{sid, serial}]}` (경로와 본문의 `dbId`가 다르면 400) | ③-1 장애 처리 (관리자 전용, 재조회 후 KILL, 감사 기록) |
 | GET | `/api/dashboard/{dbId}/checks` | `severity`(선택) | ⑧ 최신 점검 결과 목록 |
 | GET | `/api/dashboard/{dbId}/checks/{checkType}/{targetName}` | - | 6.4 점검 알림 상세 (7일 추이, 관련 객체) |
 
@@ -770,14 +864,15 @@ ORDER  BY cnt DESC;
 | `lock.refreshSecMin` / `lock.refreshSecMax` | 2 / 60 | 입력 허용 범위. 서버도 같은 범위로 요청 빈도를 제한한다 |
 | `lock.txWarn` | 5 | TX 대기 위험 기준 |
 | `lock.tmWarn` | 3 | TM 대기 위험 기준 |
-| `tmHolder.lastCallEtSec` | 60 | 장애 판정 last_call_et 기준 |
-| `tmHolder.incidentCount` | 6 | 장애 판정 Holder 수 |
-| `tmHolder.blockingOnly` | false | true면 `l.block > 0`인 Holder만 대상 (**권장 true**) |
-| `tmHolder.inactiveOnly` | false | true면 `status='INACTIVE'`만 대상 |
+| `tmHolder.lastCallEtSec` | 60 | 장애 판정 last_call_et 기준. **실제 프로퍼티는 `dbagent.monitor.tm-holder-last-call-et-seconds`** (2026-09-25 결정) — v2 `getFailureProb()`·`getActiveAlerts()`와 새 대시보드가 같은 값을 쓴다 |
+| `tmHolder.incidentCount` | 6 | 장애 판정 수 기준 (60초↑ 블로킹 TM Holder, v2와 같은 규칙) |
+| `tmHolder.blockingOnly` | false | true면 KILL 대상을 `block > 0`인 Holder로 좁힘 (기본은 전체 — 2026-09-25 결정). 장애 판정에는 영향 없음 |
+| `tmHolder.inactiveOnly` | false | true면 KILL 대상을 `status='INACTIVE'`로 좁힘. 장애 판정에는 영향 없음 |
 | `lock.txRowLockOnly` | false | true면 TX를 row lock contention만 집계 |
 | `kill.allowedRoles` | ADMIN | KILL 버튼 표시·API 허용 역할 |
-| `check.intervalMin` | 10 | ⑧ 점검 주기 |
-| `check.tablespace.warnPct` / `critPct` | 85 / 90 | |
+| `check.intervalMin` | 10 | ⑧ 가벼운 항목(테이블스페이스·FRA·TEMP·잡 실패) 점검 주기 |
+| `check.dailyHour` | 3 | ⑧ 무거운 항목(테이블 용량·무효 객체·통계) + 세그먼트 스냅샷 실행 시각(시, 0~23). 앱 기동 직후 1회는 즉시 실행 |
+| `check.tablespace.warnPct` / `critPct` | 97 / 98 | 2026-09-25 결정 |
 | `check.tableSize.warnGb` / `critGb` | 30 / 40 | |
 | `check.fra.warnPct` / `critPct` | 80 / 90 | |
 | `check.temp.warnPct` / `critPct` | 75 / 90 | |
@@ -788,7 +883,7 @@ ORDER  BY cnt DESC;
 
 ## 9. 작업 순서
 
-0. **선행 버그 수정 (2026-09-25 결정, 메인·AIX 둘 다)** — `MonitorService.getFailureProb()`(메인 `MonitorService.java:1557`)의 1차 쿼리가 `v$session`에 없는 `s.inst_id`를 참조해 매번 ORA-00904 후 `/*+ rule */` 폴백이 돈다. `w.blocking_instance = s.inst_id` 조건을 빼서 고친다. ③ Lock 카드의 장애 판정이 이 쿼리를 쓰므로 대시보드 작업 전에 먼저 수정·검증한다.
+0. ~~**선행 버그 수정**~~ **완료 (2026-09-25, 메인·AIX)** — `MonitorService.getFailureProb()`의 1차 쿼리가 `v$session`에 없는 `s.inst_id`를 참조해 매번 ORA-00904 후 `/*+ rule */` 폴백이 돌던 문제. 운영에서 실제로 돌던 rule 힌트 쿼리 하나만 남기고 깨진 1차 쿼리와 폴백 구조를 제거했다(판정 결과 동일).
 1. **코드 파악** (0장).
 2. **수집 테이블 생성** (4.2) — `MON_SQLSTAT_DELTA`, `MON_LOCK_SAMPLE`, `MON_KILL_AUDIT`, `MON_CHECK_RESULT`, `MON_SEGMENT_SIZE`. 저장소(SQLite/H2) 문법으로 변환.
 3. **수집기 수정** (4.3) — 기존 60초 샘플러의 ASH 쿼리를 7분류+8분류 동시 집계로 확장해 `ash_wc_*` 8개를 추가 저장하고(기존 `ash_*` 7개 유지), 기동 시 1시간 backfill, 코어 쿼리 `NUM_CPU_CORES` 변경, DB 시각 차이 캐시. 7분류 CASE(샘플러·`getAshActivity()` 공유)와 8분류 CASE(샘플러·신규 `/top` 공유)를 각각 공통 상수로 모은다. (4) SQL 통계 델타 추가. ASH 구간 조회(4.3 (3))와 AWR 보충 경로는 `query-performance-reviewer`로 검토.
@@ -797,7 +892,7 @@ ORDER  BY cnt DESC;
 6. **DASHBOARD 본문 교체** — 기존 게이지·탭·테이블 제거, 8프레임 배치 (2장, 5장). 목업 `UI개선_mockup.html`의 HTML/CSS/차트 코드를 참고해도 된다 (차트는 라이브러리 없이 SVG로 그림).
 7. **상세 드로어** (6장).
 8. **TM Lock 장애 처리** (③-1) — 관리자 권한, 재조회, 감사 로그. `security-reviewer`로 검토.
-8-1. **점검 알림** (⑧, 6.4) — 10분 점검 잡, `MON_CHECK_RESULT`/`MON_SEGMENT_SIZE`, 카드·필터·상세.
+8-1. **점검 알림** (⑧, 6.4) — 10분 점검 잡 + 1일 점검 잡(세그먼트 스냅샷 포함), `MON_CHECK_RESULT`/`MON_SEGMENT_SIZE`, 카드·필터·상세.
 9. **검증** (10장) — `feature-tester`.
 
 ---
@@ -811,7 +906,9 @@ ORDER  BY cnt DESC;
 - [ ] ① KPI의 AAS가 ② 차트 누적 높이와 일치한다.
 - [ ] 처음 열면 최대 부하 10분 구간이 자동 선택된다. 클릭(5분)/드래그로 선택하면 "선택 해제" 버튼이 생기고, 누르면 자동 선택으로 돌아간다.
 - [ ] ③은 리프레쉬 주기(기본 3초)로 갱신되고, 입력창에서 주기를 바꾸면 즉시 반영되며(범위 밖 값은 보정), 헤더의 `LIVE · n초 주기`도 바뀐다. "자동 갱신 중지"로 멈추고 "재개"로 다시 시작된다.
-- [ ] last_call_et 60초 이상 TM Holder가 6개 이상이면 ③ 카드가 붉게 바뀌고 장애 처리 버튼이 나타난다. 조건이 풀리면 원래대로 돌아온다.
+- [ ] 60초 이상 다른 세션을 막고 있는(자기는 막히지 않은) TM Holder가 6개 이상이면 ③ 카드가 붉게 바뀌고 장애 처리 버튼이 나타난다. 같은 순간 v2 화면의 장애 판정과 결과가 같고, 아무도 막지 않는 Holder만 많을 때는 장애로 판정하지 않는다. 조건이 풀리면 카드는 원래대로 돌아오지만, 열려 있던 확인 패널은 닫히지 않고 "장애 조건 해소됨"만 표시된다.
+- [ ] 확인 패널의 기본 선택은 TM Lock Holder 전체이며, 패널을 연 뒤 새로 생긴 Holder는 자동 선택되지 않는다.
+- [ ] 확인 패널을 연 채 DB를 바꾸면 패널이 닫히고, KILL 요청은 패널을 연 DB로만 전송된다.
 - [ ] KILL은 관리자만 할 수 있고, 실행 직전에 대상을 재조회하며, 모든 결과가 `MON_KILL_AUDIT`에 남는다. `type='USER'`가 아닌 세션은 어떤 경우에도 KILL되지 않는다.
 - [ ] ⑤⑥⑦ 행을 클릭하면 상세 드로어가 열리고, SQL/이벤트 상세의 세션 목록에서 세션 상세로 이동·뒤로가기가 된다. Esc/배경 클릭으로 닫힌다.
 - [ ] ⑤⑥⑦·드로어는 선택 구간의 ASH로 집계되고, ASH 보관 범위 밖 구간을 고르면 `dba_hist_active_sess_history`로 보충되어 데이터 소스 라벨에 표시된다.
@@ -819,3 +916,11 @@ ORDER  BY cnt DESC;
 - [ ] 11g 대상 DB에서도 모든 조회가 동작한다 (`FETCH FIRST` 등 12c 전용 문법 없음).
 - [ ] ⑧ 점검 알림이 대시보드 맨 아래 가로로 표시되고, 위험→주의→확인 순으로 정렬되며, 필터와 카드 클릭 상세가 동작한다. 카드가 많으면 프레임 안에서만 가로 스크롤된다.
 - [ ] 대상 DB 접속 실패 시 "수집 실패"와 ORA 메시지가 보이고, 빈 차트를 정상으로 표시하지 않는다.
+- [ ] "화면 상태 정의" 표의 상태(첫 로딩 스켈레톤, DB 전환, 데이터 공백, 수집 지연, 판단 보류, ASH 조회 실패, 빈 결과, 권한 없음, 비관리자, 비Oracle, 점검 실패, 화면 숨김)가 각각 표대로 표시된다. 어떤 실패도 0이나 "알림 없음"으로 보이지 않는다.
+- [ ] 한 세션이 여러 테이블에 TM Lock을 잡아도 Holder 수는 1로 센다 (세션 단위 집계).
+- [ ] 여러 사람이 같은 DB 대시보드를 동시에 열어도 Lock 조회는 DB별 주기당 1회만 원본에 나간다.
+- [ ] FRA를 설정하지 않은 DB에서 ⑧ 점검이 오류 없이 동작하고 FRA 카드가 나오지 않는다. TEMP 사용률은 autoextend MAXSIZE 기준이다.
+- [ ] 테이블 용량·무효 객체·통계 점검은 하루 1회(기본 03시, 앱 기동 직후 1회)만 실행되고, 카드에 항목별 마지막 점검 시각이 보인다.
+- [ ] SQL 통계 델타에 앱 재기동 직후·커서 재적재 시 급등값이 저장되지 않는다.
+- [ ] 외부 폰트·CDN·`color-mix()`·`dvh`를 쓰지 않는다. zoom 90% 상태에서 드로어·툴팁 위치와 차트 호버·드래그 좌표가 맞다. http 주소에서 "구문 복사"가 동작하거나 수동 복사 안내가 나온다. 라이트 테마에서도 색 대비가 유지된다.
+- [ ] 메인(SQLite, Java 17)과 AIX(H2, Java 8) 양쪽에서 같은 결과로 동작한다.

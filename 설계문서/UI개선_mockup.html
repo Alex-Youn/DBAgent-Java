@@ -217,6 +217,10 @@ tr.over td{background:color-mix(in srgb, var(--crit) 8%, transparent)}
 .killpanel table td,.killpanel table th{text-align:left}
 .killpanel td.n{text-align:right}
 .killpanel .short{color:var(--warn);font-size:10px;margin-left:6px}
+.killpanel .newtag{color:var(--ink-2);font-size:10px;margin-left:6px;padding:0 4px;border:1px solid var(--axis);border-radius:3px}
+.killpanel tr.gone td{color:var(--muted);text-decoration:line-through}
+.killpanel tr.gone .goneTag{text-decoration:none;display:inline-block;color:var(--muted)}
+.kp-note{margin:0 0 6px;padding:5px 8px;border-radius:4px;font-size:11px;background:color-mix(in srgb, var(--good) 16%, var(--surface));color:var(--ink)}
 .killpanel pre{font-family:var(--mono);font-size:10.5px;background:var(--surface-2);border-radius:4px;padding:7px 9px;margin:6px 0 0;overflow-x:auto;color:var(--ink-2)}
 .kp-act{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap}
 .killbtn{background:var(--crit);color:#fff;border:0;border-radius:5px;padding:6px 13px;font-weight:700;font-size:12px;cursor:pointer}
@@ -402,7 +406,7 @@ tr.over td{background:color-mix(in srgb, var(--crit) 8%, transparent)}
             <span><i class="lk" style="background:var(--wc-6)"></i>TM 테이블 잠금</span>
             <span><i class="lk th"></i>경고 5건</span>
             <span><i class="lk kl"></i>장애 처리(KILL)</span>
-            <span class="lkcrit">장애 기준: last_call_et 60초↑ TM Holder 6개↑</span>
+            <span class="lkcrit">장애 기준: 60초↑ 블로킹 TM Holder 6개↑</span>
           </div>
           <div class="plot" id="lkPlot" tabindex="0" aria-label="TX, TM Lock 대기 세션 수 실시간 차트. 좌우 화살표로 시각 이동">
             <svg id="lkSvg" role="img" aria-label="최근 10분 TX, TM Lock 대기 세션 수"></svg>
@@ -430,7 +434,7 @@ tr.over td{background:color-mix(in srgb, var(--crit) 8%, transparent)}
         <div class="al-head">
           <h2>점검 알림</h2>
           <span class="al-sum" id="alSum"></span>
-          <span class="al-meta">마지막 점검 14:25 · 10분 주기 · 클릭하면 상세와 조치</span>
+          <span class="al-meta">마지막 점검 14:25 · 10분 주기 (용량·무효 객체·통계는 1일 1회) · 클릭하면 상세와 조치</span>
           <div class="seg al-filter" role="group" aria-label="알림 필터" id="alFilter">
             <button type="button" data-f="all" aria-pressed="true">전체</button>
             <button type="button" data-f="crit" aria-pressed="false">위험</button>
@@ -852,9 +856,9 @@ ORDER  BY s.wait_time_micro DESC;`)
 /* ===== 점검 알림 ===== */
 const SEVL={crit:'위험',warn:'주의',info:'확인'};
 const ALERTS=[
- {id:'ts-app-data',sev:'crit',cat:'테이블스페이스',name:'APP_DATA',kind:'pct',val:92.4,th:90,
-  detail:'412.3 / 446.0 GB · 여유 33.7 GB · 약 16일 후 가득 참',hist:[84.1,85.6,86.9,88.3,89.7,91.0,92.4],
-  kv:[['사용률','92.4% (임계 90%)'],['사용량','412.3 GB'],['최대 크기 (MAXSIZE 합)','446.0 GB'],['여유','33.7 GB'],['자동 확장','데이터파일 6개 모두 MAXSIZE 도달'],['일 평균 증가','+2.1 GB → 약 16일 후 가득 참']],
+ {id:'ts-app-data',sev:'crit',cat:'테이블스페이스',name:'APP_DATA',kind:'pct',val:98.4,th:98,
+  detail:'438.9 / 446.0 GB · 여유 7.1 GB · 약 3일 후 가득 참',hist:[96.0,96.4,96.9,97.3,97.7,98.0,98.4],
+  kv:[['사용률','98.4% (위험 98%)'],['사용량','438.9 GB'],['최대 크기 (MAXSIZE 합)','446.0 GB'],['여유','7.1 GB'],['자동 확장','데이터파일 6개 모두 MAXSIZE 도달'],['일 평균 증가','+2.1 GB → 약 3일 후 가득 참']],
   objTitle:'이 테이블스페이스의 큰 세그먼트',objs:[['APP.SALES_HIST','TABLE PARTITION','88.4 GB'],['APP.ORDERS','TABLE','61.7 GB'],['APP.ORDER_LOG','TABLE','48.2 GB'],['APP.PAYMENTS','TABLE','37.9 GB'],['APP.CUSTOMERS','TABLE','12.3 GB']],
   action:'데이터파일을 추가하거나 MAXSIZE를 늘리세요. 증가를 주도하는 ORDER_LOG의 보관 정책(파티션 전환, 오래된 데이터 삭제 배치)도 함께 검토하세요.',
   query:`SELECT m.tablespace_name,
@@ -866,14 +870,15 @@ JOIN   dba_tablespaces t ON t.tablespace_name = m.tablespace_name
 WHERE  m.used_percent >= :warn_pct
 ORDER  BY m.used_percent DESC;
 
--- 큰 세그먼트
-SELECT owner, segment_name, segment_type,
-       ROUND(SUM(bytes) / POWER(1024,3), 1) AS size_gb
-FROM   dba_segments
-WHERE  tablespace_name = :tablespace_name
-GROUP  BY owner, segment_name, segment_type
-ORDER  BY size_gb DESC
-FETCH FIRST 5 ROWS ONLY;`},
+-- 큰 세그먼트 (11g 대응: FETCH FIRST 대신 ROWNUM)
+SELECT * FROM (
+  SELECT owner, segment_name, segment_type,
+         ROUND(SUM(bytes) / POWER(1024,3), 1) AS size_gb
+  FROM   dba_segments
+  WHERE  tablespace_name = :tablespace_name
+  GROUP  BY owner, segment_name, segment_type
+  ORDER  BY size_gb DESC
+) WHERE ROWNUM <= 5;`},
  {id:'tb-order-log',sev:'crit',cat:'테이블 용량',name:'APP.ORDER_LOG',kind:'size',val:48.2,th:40,unit:'GB',
   detail:'임계 40 GB · 일 증가 +1.3 GB · 파티션 없음',hist:[40.4,41.7,43.0,44.3,45.6,46.9,48.2],
   kv:[['크기','48.2 GB (임계 40 GB)'],['테이블스페이스','APP_DATA'],['행 수 (통계 기준)','약 6억 1천만'],['일 평균 증가','+1.3 GB'],['파티션','없음'],['마지막 통계 수집','2026-09-20 22:10']],
@@ -889,9 +894,9 @@ HAVING SUM(bytes) >= :limit_gb * POWER(1024,3)
 ORDER  BY size_gb DESC;
 -- 일 증가량은 자체 수집 테이블(MON_SEGMENT_SIZE, 일 1회 스냅샷)의 차이로 계산
 -- (dba_hist_seg_stat은 AWR 보관 기간·스냅샷 대상 세그먼트에 따라 누락이 있어 사용하지 않음)`},
- {id:'ts-app-index',sev:'warn',cat:'테이블스페이스',name:'APP_INDEX',kind:'pct',val:86.1,th:85,
-  detail:'172.2 / 200.0 GB · 여유 27.8 GB',hist:[83.0,83.4,84.0,84.5,85.0,85.6,86.1],
-  kv:[['사용률','86.1% (임계 85%)'],['사용량','172.2 GB'],['최대 크기','200.0 GB'],['여유','27.8 GB'],['일 평균 증가','+0.5 GB → 약 55일 후 가득 참']],
+ {id:'ts-app-index',sev:'warn',cat:'테이블스페이스',name:'APP_INDEX',kind:'pct',val:97.3,th:97,
+  detail:'194.6 / 200.0 GB · 여유 5.4 GB · 약 11일 후 가득 참',hist:[95.9,96.1,96.4,96.6,96.9,97.1,97.3],
+  kv:[['사용률','97.3% (주의 97%)'],['사용량','194.6 GB'],['최대 크기','200.0 GB'],['여유','5.4 GB'],['일 평균 증가','+0.5 GB → 약 11일 후 가득 참']],
   objTitle:'이 테이블스페이스의 큰 세그먼트',objs:[['APP.IX_ORDER_LOG_01','INDEX','14.6 GB'],['APP.IX_SALES_HIST_02','INDEX PARTITION','13.1 GB'],['APP.PK_ORDER_LOG','INDEX','9.8 GB']],
   action:'사용하지 않는 인덱스를 확인하고(인덱스 모니터링), 필요하면 데이터파일을 추가하세요.',
   query:`SELECT m.tablespace_name, ROUND(m.used_percent, 1) AS used_pct
@@ -905,22 +910,27 @@ WHERE  m.tablespace_name = :tablespace_name;`},
   query:`SELECT name,
        ROUND(space_limit / POWER(1024,3))                                  AS limit_gb,
        ROUND(space_used  / POWER(1024,3))                                  AS used_gb,
-       ROUND((space_used - space_reclaimable) / space_limit * 100, 1)      AS used_pct
-FROM   v$recovery_file_dest;
+       ROUND((space_used - space_reclaimable) / NULLIF(space_limit, 0) * 100, 1) AS used_pct
+FROM   v$recovery_file_dest
+WHERE  space_limit > 0;          -- FRA 미설정 DB는 제외 (0으로 나누기 방지)
 
 SELECT file_type, percent_space_used, percent_space_reclaimable
 FROM   v$recovery_area_usage
 ORDER  BY percent_space_used DESC;`},
  {id:'temp',sev:'warn',cat:'TEMP 사용률',name:'TEMP',kind:'pct',val:77.8,th:75,
   detail:'24.9 / 32.0 GB · 정렬 SQL 0w2qpuc6u2zsp',hist:null,
-  kv:[['사용률','77.8% (임계 75%)'],['사용량','24.9 GB'],['전체','32.0 GB'],['가장 많이 쓰는 SQL','0w2qpuc6u2zsp (18.2 GB, SORT)']],
+  kv:[['사용률','77.8% (임계 75%)'],['사용량','24.9 GB'],['최대 크기 (MAXSIZE 합)','32.0 GB'],['가장 많이 쓰는 SQL','0w2qpuc6u2zsp (18.2 GB, SORT)']],
   objTitle:'TEMP 사용 세션',objs:[['SID 312 · BATCH','0w2qpuc6u2zsp','18.2 GB'],['SID 655 · RPT_USER','7h35uxf5uhmm1','5.1 GB'],['SID 1190 · APP_USER','3kqrku32p6sfn','1.6 GB']],
   action:'대량 정렬 SQL의 실행계획을 확인하세요. ORA-01652가 나기 전에 TEMP 파일 추가를 검토하세요.',
-  query:`SELECT s.tablespace_name,
-       ROUND(s.used_blocks  * t.block_size / POWER(1024,3), 1) AS used_gb,
-       ROUND(s.total_blocks * t.block_size / POWER(1024,3), 1) AS total_gb
-FROM   v$sort_segment s
-JOIN   dba_tablespaces t ON t.tablespace_name = s.tablespace_name;
+  query:`SELECT f.tablespace_name,
+       ROUND((f.tablespace_size - f.free_space) / POWER(1024,3), 1)                AS used_gb,
+       ROUND(m.max_bytes / POWER(1024,3), 1)                                       AS max_gb,
+       ROUND((f.tablespace_size - f.free_space) / NULLIF(m.max_bytes, 0) * 100, 1) AS used_pct
+FROM   dba_temp_free_space f
+JOIN  (SELECT tablespace_name,
+              SUM(CASE WHEN autoextensible = 'YES' THEN GREATEST(maxbytes, bytes) ELSE bytes END) AS max_bytes
+       FROM   dba_temp_files GROUP BY tablespace_name) m
+  ON   m.tablespace_name = f.tablespace_name;
 
 SELECT u.session_num AS serial#, s.sid, s.username, u.sql_id, u.segtype,
        ROUND(u.blocks * t.block_size / POWER(1024,3), 1) AS used_gb
@@ -1058,7 +1068,8 @@ const HPOOL=[
 let seed=42;const R=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
 let clock=14*3600+20*60,hp=0,cool=0;const tx=[],holders=[],hist=[],kills=[];
 function addHolder(lce){let p;for(let k=0;k<HPOOL.length;k++){const c=HPOOL[hp++%HPOOL.length];if(!holders.some(h=>h.sid===c.sid)){p=c;break}}if(!p)return;holders.push({...p,serial:1000+Math.floor(R()*50000),lce,waiters:0})}
-const overCnt=()=>holders.filter(h=>h.lce>=LCE).length;
+// 장애 판정 수: v2 getFailureProb()와 같은 규칙 - 60초↑ 이면서 실제로 다른 세션을 막고 있는 Holder만 (목업엔 blocking_session이 없어 항상 NULL로 본다)
+const overCnt=()=>holders.filter(h=>h.lce>=LCE&&h.waiters>0).length;
 const incident=()=>overCnt()>=HOLD_LIMIT;
 function step(dt=TICK){
   clock+=dt;
@@ -1090,7 +1101,7 @@ function renderStats(){
   add(TYPE.TX.c,'TX 대기 세션',String(h.tx),'건',pill(lvl(h.tx,1,WARN),h.tx?null:'대기 없음'));
   add(TYPE.TM.c,'TM 대기 세션',String(h.tm),'건',pill(lvl(h.tm,1,3),h.tm?null:'대기 없음'));
   const oc=overCnt();
-  add(null,'TM Holder (60초↑)',String(oc),`/ ${HOLD_LIMIT}개`,pill(oc>=HOLD_LIMIT?{c:'crit',t:'장애 기준 도달'}:oc>=3?{c:'warn',t:`기준까지 ${HOLD_LIMIT-oc}개`}:{c:'good',t:`전체 Holder ${holders.length}개`}));
+  add(null,'블로킹 TM Holder (60초↑)',String(oc),`/ ${HOLD_LIMIT}개`,pill(oc>=HOLD_LIMIT?{c:'crit',t:'장애 기준 도달'}:oc>=3?{c:'warn',t:`기준까지 ${HOLD_LIMIT-oc}개`}:{c:'good',t:`전체 Holder ${holders.length}개`}));
   const maxL=holders.reduce((m,x)=>Math.max(m,x.lce),0);
   add(null,'최장 last_call_et',maxL?mmss(maxL):'—','',pill(lvl(maxL,30,LCE),maxL?null:'Holder 없음'));
 }
@@ -1098,36 +1109,55 @@ function renderStats(){
 function renderIncident(){
   const card=$('lockCard'),on=incident(),bar=$('incBar');
   card.classList.toggle('incident',on);bar.hidden=!on;
-  if(on){$('incTxt').textContent=`last_call_et 60초 이상 TM Lock Holder ${overCnt()}개 · 기준 ${HOLD_LIMIT}개 이상 · 전체 Holder ${holders.length}개`;
+  if(on){$('incTxt').textContent=`60초 이상 다른 세션을 막고 있는 TM Lock Holder ${overCnt()}개 · 기준 ${HOLD_LIMIT}개 이상 · 전체 Holder ${holders.length}개`;
     $('incBtn').textContent=`장애 처리 · TM Holder ${holders.length}개 KILL`}
-  if(!on&&panelOpen)closePanel();
+  // 설계 ③-1 5번(2026-09-25 결정): 조건이 풀려도 확인 패널은 자동으로 닫지 않는다 - 목록만 갱신한다.
+  if(panelOpen&&!busy)refreshPanel();
   const lg=$('lkLog');lg.hidden=!log;if(log)lg.textContent=log;
 }
 
+// 확인 패널: rows = sid → {tr, cb, serial, gone}. 연 시점의 Holder는 전체 선택, 이후 새로 생긴 Holder는 선택하지 않고 추가만 한다.
+let rows=new Map(),busy=false;
+function addRow(tb,h,checked,isNew){
+  const tr=el('tr'),c=el('td'),cb=el('input');cb.type='checkbox';cb.checked=checked;cb.id='k'+h.sid;cb.dataset.sid=h.sid;cb.onchange=updCmd;c.append(cb);
+  const lab=el('label','mono',`${h.sid},${h.serial}`);lab.htmlFor=cb.id;const sidTd=el('td');sidTd.append(lab);if(isNew)sidTd.append(el('span','newtag','새로 생김'));
+  const lce=el('td','num'),w=el('td','n num');
+  tr.append(c,sidTd,el('td',null,`${h.user} · ${h.prog}`),el('td','mono',h.obj),lce,w);tb.append(tr);
+  const r={tr,cb,lce,w,serial:h.serial,gone:false};rows.set(h.sid,r);fillRow(r,h);return r}
+function fillRow(r,h){r.lce.textContent=mmss(h.lce);if(h.lce<LCE)r.lce.append(el('span','short','60초 미만'));r.w.textContent=`${h.waiters}건`}
 function openPanel(){
-  panelOpen=true;const p=$('killPanel');p.textContent='';p.hidden=false;
+  panelOpen=true;rows=new Map();const p=$('killPanel');p.textContent='';p.hidden=false;
   p.append(el('h3',null,`TM Lock Holder ${holders.length}개 세션을 KILL 합니다`));
-  p.append(el('p','sub','기본값은 전체 선택입니다. 대상은 실행 직전에 다시 조회해서, 그 사이 커밋·종료된 세션은 건너뜁니다.'));
+  const note=el('p','kp-note');note.id='kpNote';note.hidden=true;note.setAttribute('role','status');p.append(note);
+  p.append(el('p','sub','기본값은 전체 선택입니다. 패널을 연 뒤 새로 생긴 Holder는 자동으로 선택되지 않습니다. 대상은 실행 직전에 다시 조회해서, 그 사이 커밋·종료된 세션은 건너뜁니다.'));
   const wrap=el('div','tablewrap'),t=el('table'),hr=el('tr');
   ['','SID,SERIAL#','사용자 · 프로그램','잠금 객체','last_call_et','막고 있는 세션'].forEach(h=>hr.append(el('th',null,h)));
-  const th=el('thead');th.append(hr);t.append(th);const tb=el('tbody');
-  holders.slice().sort((a,b)=>b.lce-a.lce).forEach(h=>{
-    const tr=el('tr'),c=el('td'),cb=el('input');cb.type='checkbox';cb.checked=true;cb.id='k'+h.sid;cb.dataset.sid=h.sid;cb.onchange=updCmd;c.append(cb);
-    const lce=el('td','num',mmss(h.lce));if(h.lce<LCE)lce.append(el('span','short','60초 미만'));
-    const lab=el('label','mono',`${h.sid},${h.serial}`);lab.htmlFor=cb.id;const sidTd=el('td');sidTd.append(lab);
-    tr.append(c,sidTd,el('td',null,`${h.user} · ${h.prog}`),el('td','mono',h.obj),lce,el('td','n num',`${h.waiters}건`));tb.append(tr)});
+  const th=el('thead');th.append(hr);t.append(th);const tb=el('tbody');tb.id='kpBody';
+  holders.slice().sort((a,b)=>b.lce-a.lce).forEach(h=>addRow(tb,h,true,false));
   t.append(tb);wrap.append(t);p.append(wrap);
   const pre=el('pre');pre.id='kpCmd';p.append(pre);
   const act=el('div','kp-act'),cancel=el('button','linkbtn','취소'),go=el('button','killbtn');cancel.type=go.type='button';go.id='kpGo';
   cancel.onclick=closePanel;go.onclick=execKill;act.append(cancel,go);p.append(act);updCmd();go.focus();
 }
-function sel(){return [...document.querySelectorAll('#killPanel input[type=checkbox]:checked')].map(c=>+c.dataset.sid)}
+// 매 주기: 조건 해소 안내, 종료된 세션 비활성, 새 Holder 추가(미선택), 값 갱신
+function refreshPanel(){
+  const note=$('kpNote');if(!note)return;
+  const on=incident();note.hidden=on;if(!on)note.textContent=`장애 조건 해소됨 (현재 블로킹 Holder ${overCnt()}개 · 기준 ${HOLD_LIMIT}개). KILL 여부를 판단한 뒤 직접 닫으세요.`;
+  const alive=new Map(holders.map(h=>[h.sid,h]));
+  rows.forEach((r,sid)=>{const h=alive.get(sid);
+    if(!h||h.serial!==r.serial){if(!r.gone){r.gone=true;r.cb.checked=false;r.cb.disabled=true;r.tr.classList.add('gone');r.lce.textContent='';r.lce.append(el('span','goneTag','종료됨'));r.w.textContent='—'}}
+    else fillRow(r,h)});
+  const tb=$('kpBody');holders.forEach(h=>{if(!rows.has(h.sid))addRow(tb,h,false,true)});
+  updCmd();
+}
+function sel(){return [...document.querySelectorAll('#killPanel input[type=checkbox]:checked:not(:disabled)')].map(c=>+c.dataset.sid)}
 function updCmd(){const s=sel(),hs=holders.filter(h=>s.includes(h.sid));
   $('kpCmd').textContent=hs.length?hs.map(h=>`ALTER SYSTEM KILL SESSION '${h.sid},${h.serial}' IMMEDIATE;`).join('\n'):'-- 선택된 세션이 없습니다';
   const go=$('kpGo');go.textContent=`KILL 실행 (${hs.length}개)`;go.disabled=!hs.length}
-function closePanel(){panelOpen=false;const p=$('killPanel');p.hidden=true;p.textContent=''}
+function closePanel(){panelOpen=false;busy=false;rows=new Map();const p=$('killPanel');p.hidden=true;p.textContent=''}
+$('killPanel').addEventListener('keydown',e=>{if(e.key==='Escape'&&!busy){e.preventDefault();closePanel();$('incBtn').focus()}});
 function execKill(){
-  const s=sel(),go=$('kpGo');go.disabled=true;go.textContent='KILL 실행 중…';
+  const s=sel(),go=$('kpGo');go.disabled=true;go.textContent='KILL 실행 중…';busy=true;
   setTimeout(()=>{
     const done=holders.filter(h=>s.includes(h.sid));
     for(let i=holders.length-1;i>=0;i--)if(s.includes(holders[i].sid))holders.splice(i,1);
