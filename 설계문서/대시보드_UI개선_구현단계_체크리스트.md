@@ -136,19 +136,19 @@
 
 ---
 
-## 5단계 — Top / 드로어 API + SQL 통계 델타 (백엔드)
+## 5단계 — Top / 드로어 API + SQL 통계 델타 (백엔드) ✅ 완료 (2026-09-25, 전체 순서 D1·D2 + F3)
 
-- [ ] `ash_base` 공통 인라인 뷰 (8분류 CASE, FOREGROUND, 모니터링 계정 제외, `blocking_inst_id` 포함)
-- [ ] `/top`: Top SQL·세션·이벤트 5개씩 한 번에, AAS = 샘플 수 × 간격 ÷ 구간 초
+- [x] `ash_base` 공통 인라인 뷰 (8분류 CASE, FOREGROUND, 모니터링 계정 제외, `blocking_inst_id` 포함) — `AshRange` + `DashboardQueryService.BASE_COLUMNS`
+- [x] `/top`: Top SQL·세션·이벤트 5개씩 한 번에, AAS = 샘플 수 × 간격 ÷ 구간 초 — GROUPING SETS로 ASH 1회 스캔(19c/21c EXPLAIN으로 TEMP TABLE TRANSFORMATION 확인, **11g는 폐쇄망 실측 필요**)
 - [x] 보관 범위 밖 구간: `MIN(sample_time)` 기준으로 `dba_hist_active_sess_history`(10초) 보충, 응답 `source: ash|awr|mixed` (D2, `AshRange`)
 - [x] 구간은 DB 시각 기준, 최대 24시간, 타임아웃 `ashActivityQueryTimeoutSeconds` (D1, AWR 섞이면 `ash-awr-query-timeout-seconds` 60초)
-- [ ] SQL 텍스트는 상위 5개만 `v$sqlstats`에서 조회, aged-out이면 "SQL 텍스트 없음"
-- [ ] 세션 상세 / SQL 상세 / 이벤트 상세 API (설계 6장)
-- [ ] 블로커가 다른 인스턴스면(`blocking_inst_id`/`blocking_instance` ≠ 접속 인스턴스) 로컬 조회하지 않고 표시만
-- [ ] SQL 통계 델타 수집기: `(sql_id, plan_hash_value)`별, 첫 관측은 기준값만, 음수는 버림, 0 델타 미저장, 10분 미관측 키 제거
-- [ ] AIX 포팅
-- [ ] `query-performance-reviewer` 검토
-- [ ] 커밋
+- [x] SQL 텍스트는 상위 5개만 `v$sqlstats`에서 조회, aged-out이면 "SQL 텍스트 없음" — IN 대신 단건 UNION ALL(X$ 고정 테이블은 IN이면 전체 스캔, 리뷰 실측)
+- [x] 세션 상세 / SQL 상세 / 이벤트 상세 API (설계 6장) — 분류별 합계와 구간 전체 합계를 한 스캔(조건부 SUM + `SUM(SUM(w)) OVER()`), 응답 `queries`(조회 쿼리 보기), SQL 전문은 2000자 절단
+- [x] 블로커가 다른 인스턴스면(`blocking_inst_id`/`blocking_instance` ≠ 접속 인스턴스) 로컬 조회하지 않고 표시만 — `blockerRemote` (단일 인스턴스라 true 경로는 로컬 검증 불가)
+- [x] SQL 통계 델타 수집기: `(sql_id, plan_hash_value)`별, 첫 관측은 기준값만, 음수는 버림, 0 델타 미저장, 10분 미관측 키 제거 — `SqlStatDeltaCollector`(60초, 5초↑ 걸리면 경고 로그)
+- [x] AIX 포팅
+- [x] `query-performance-reviewer` 검토 — 반영: SQL 텍스트 IN→UNION ALL+타임아웃, 드로어 재스캔 병합, CLOB 절단, 수집 시간 로그. 이월: 11g에서 GROUPING SETS 1회 스캔 여부·운영 공유 풀에서 수집 시간 실측(폐쇄망)
+- [x] 커밋
 
 ---
 
