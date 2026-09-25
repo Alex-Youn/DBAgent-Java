@@ -89,18 +89,18 @@
 
 ---
 
-## 3단계 — 저장 테이블 (SQLite / H2)
+## 3단계 — 저장 테이블 (SQLite / H2) ✅ 완료 (2026-09-25, 전체 순서 F1)
 
-- [ ] `mon_sqlstat_delta` (PK에 `plan_hash_value` 포함)
-- [ ] `mon_lock_sample` (1분 요약, `tm_holder_over_max` = 장애 판정 수 최대값)
-- [ ] `mon_kill_audit` (`instance_name` 포함, `inst_id` 없음)
-- [ ] `mon_check_result` (`severity`: CRIT/WARN/INFO/OK/ERROR)
-- [ ] `mon_segment_size`
-- [ ] 시각은 epoch ms INTEGER, 테이블명 소문자 snake_case (기존 `instance_metric_history` 관례)
-- [ ] 보관 주기 배치: 1분 테이블 30일, `mon_kill_audit` 1년 (분할 삭제로 긴 쓰기 락 방지)
-- [ ] 비밀번호 암호화 전례처럼 파일 크기 증가 대응 확인 (SQLite VACUUM / H2 DEFRAG)
-- [ ] AIX 포팅
-- [ ] 커밋
+- [x] `mon_sqlstat_delta` (PK에 `plan_hash_value` 포함)
+- [x] `mon_lock_sample` (1분 요약, `tm_holder_over_max` = 장애 판정 수 최대값)
+- [x] `mon_kill_audit` (`instance_name` 포함, `inst_id` 없음) — 컬럼명 `serial_no`/`kill_result`(H2 예약어·특수문자 회피)
+- [x] `mon_check_result` (`severity`: CRIT/WARN/INFO/OK/ERROR)
+- [x] `mon_segment_size`
+- [x] 시각은 epoch ms INTEGER, 테이블명 소문자 snake_case (기존 `instance_metric_history` 관례)
+- [x] 보관 주기 배치: 1분 테이블 30일, `mon_kill_audit` 1년 (분할 삭제로 긴 쓰기 락 방지) — 매일 03:50, 5000행씩, 설정 `store-retention-days`/`kill-audit-retention-days`
+- [x] 비밀번호 암호화 전례처럼 파일 크기 증가 대응 확인 (SQLite VACUUM / H2 DEFRAG) — 지운 공간은 재사용(SQLite free page / H2 auto compact)되어 보관 기간 이후 파일이 더 커지지 않음. VACUUM·DEFRAG_ALWAYS는 쓰기 락·종료 지연 때문에 쓰지 않음(지운 값이 남으면 안 되는 요구 없음)
+- [x] AIX 포팅 (H2 1.4.200: `MERGE ... KEY`, `DELETE ... LIMIT`, `AUTO_INCREMENT` — 복사본 DB로 실행 확인)
+- [x] 커밋
 
 ---
 

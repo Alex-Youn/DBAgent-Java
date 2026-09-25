@@ -103,6 +103,10 @@
 # AWR이 섞인 구간 조회의 타임아웃(초) - ASH만 쓰는 조회는 ash-activity-query-timeout-seconds
 #dbagent.monitor.ash-awr-query-timeout-seconds=60
 
+# 대시보드 개편 수집 테이블(mon_*) 보관 기간(일) - 1분/10분/일 테이블, KILL 감사 로그 (2026-09-25)
+#dbagent.monitor.store-retention-days=30
+#dbagent.monitor.kill-audit-retention-days=365
+
 # ── RDB(MySQL / MariaDB / PostgreSQL / MS SQL Server / CUBRID) 커넥션 풀 ──
 # Oracle 풀과 완전히 분리된 별도 설정이라 위 dbagent.oracle.* 의 영향을 받지 않는다.
 #dbagent.rdb.connect-timeout-ms=2000
