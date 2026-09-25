@@ -55,15 +55,16 @@
 - [ ] AIX 런타임 테스트 (H2·Java 8 실행 환경) — 코드 동일·compile만 확인, 배포 전 확인
 - [x] 커밋 (메인 `57a2a7b`, AIX `21183c3`)
 
-### 1-3. CPU 코어 수 기준 통일 (`NUM_CPU_CORES`) — 체크리스트 1-1, 검토결과 1-1과 같은 작업
-> 검토결과 문서: "한 곳만 바꾸면 화면마다 코어 수가 다시 갈리므로 **전부 같이** 변경". `NUM_CPU_CORES`가 없으면 `NUM_CPUS`로 대체하는 공통 헬퍼 1개를 만들어 모든 곳이 그것을 쓰게 한다.
-- [ ] 공통 헬퍼 작성 (`NUM_CPU_CORES` 우선, 없으면 `NUM_CPUS`)
-- [ ] `InstanceMetricSamplerService.java:142` (`sampleOne()` — v2 CPU%, `ash_cpu_cores`)
-- [ ] `MonitorService.java:322` (`getAshActivity()` — Current Session 차트 코어선)
-- [ ] `MonitorService.java:1019`
-- [ ] `MonitorService.java:1102`
-- [ ] `MonitorService.java:1790`
-- [ ] 코드 검색으로 `NUM_CPUS` 직접 조회가 헬퍼 밖에 남지 않았는지 확인
+### 1-3. CPU 코어 수 기준 통일 (`NUM_CPU_CORES`) — 체크리스트 1-1 ✅ (2026-09-25)
+> **범위 결정 (2026-09-25 오케스트레이터, (가)안)**: `NUM_CPU_CORES`는 **코어 기준선**(AAS 비교)에만 쓰고, **CPU 사용률(%)의 분모는 기존 `NUM_CPUS` 유지**. 로컬 실측 NUM_CPUS=32 / NUM_CPU_CORES=16처럼 SMT 서버는 논리 CPU가 코어의 2~8배라, CPU% 분모를 코어로 바꾸면 같은 부하에서 CPU%가 부풀어 100%를 넘는다. 화면에 "코어 수"로 보이는 값은 모두 `NUM_CPU_CORES`로 통일되므로 검토결과의 "화면마다 코어 수가 갈림" 문제는 생기지 않는다.
+- [x] 공통 헬퍼 `CpuCores.query(conn)` 작성 (`NUM_CPU_CORES` 우선, 없으면 `NUM_CPUS`)
+- [x] `MonitorService.getAshActivity()` — Current Session 차트 코어 기준선 → 헬퍼 사용
+- [x] `InstanceMetricSamplerService.sampleOne()` — `ash_cpu_cores`(코어 기준선)만 헬퍼 사용, `cpu_pct`는 `NUM_CPUS` 유지
+- [x] CPU% 3곳(`getDashboardStats`, v2 상태, 인스턴스 상세)은 `NUM_CPUS` 유지 — 변경 없음
+- [x] AIX 포팅 (같은 코드, compile 성공)
+- [x] 검증 (메인 jar, dist 설정, 로컬 XE): `/api/ash_activity` `cpu_cores` 32 → **16**, 샘플러 `ash_cpu_cores` 새 샘플부터 **16**, 대시보드 CPU%는 기존 계산 그대로
+- [ ] AIX 런타임 테스트 — 배포 전
+- [x] 커밋 (메인 `998846a`, AIX `8d794da`)
 - [ ] AIX 포팅
 - [ ] 검증: v2 CPU%·Current Session 코어선이 새 코어 수 기준으로 표시
 - [ ] 커밋

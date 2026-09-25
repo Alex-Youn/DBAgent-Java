@@ -304,7 +304,8 @@ SELECT value FROM v$sysmetric WHERE metric_name = 'Average Active Sessions';  --
 SELECT value FROM v$osstat    WHERE stat_name   = 'NUM_CPU_CORES';            -- ash_cpu_cores (NUM_CPUS → 변경)
 ```
 
-- 코어 수 기준을 `NUM_CPU_CORES`로 통일한다(폐쇄망 실측으로 확정, 체크리스트). 샘플러·`getAshActivity()`·이 대시보드가 모두 같은 값을 쓰게 한다. `NUM_CPU_CORES`가 없으면 `NUM_CPUS`로 대체.
+- 코어 수 기준을 `NUM_CPU_CORES`로 통일한다(폐쇄망 실측으로 확정, 체크리스트). 샘플러·`getAshActivity()`·이 대시보드가 모두 같은 값을 쓰게 한다. `NUM_CPU_CORES`가 없으면 `NUM_CPUS`로 대체. **2026-09-25 구현 완료** — 공통 헬퍼 `CpuCores.query()`.
+- **CPU 사용률(%)의 분모는 `NUM_CPUS`(논리 CPU)를 유지한다** (2026-09-25 결정). SMT 서버는 논리 CPU가 코어의 2~8배라 분모를 코어로 바꾸면 CPU%가 100%를 넘는다. 코어 수는 AAS와 비교하는 기준선에만 쓴다.
 - 수집 실패는 기존 샘플러 방식대로 해당 분에 행을 남기지 않는다. 화면은 빈 분을 0으로 잇지 않고 **끊어서** 그리며, 최근 수집 실패는 상태 pill의 "수집 실패"로 표시한다.
 
 **(3) ASH 구간 조회 — ⑤⑥⑦·드로어 공통 (저장 없음, 화면 요청 시)**
@@ -886,7 +887,7 @@ ORDER  BY cnt DESC;
 0. ~~**선행 버그 수정**~~ **완료 (2026-09-25, 메인·AIX)** — `MonitorService.getFailureProb()`의 1차 쿼리가 `v$session`에 없는 `s.inst_id`를 참조해 매번 ORA-00904 후 `/*+ rule */` 폴백이 돌던 문제. 운영에서 실제로 돌던 rule 힌트 쿼리 하나만 남기고 깨진 1차 쿼리와 폴백 구조를 제거했다(판정 결과 동일).
 1. **코드 파악** (0장).
 2. **수집 테이블 생성** (4.2) — `MON_SQLSTAT_DELTA`, `MON_LOCK_SAMPLE`, `MON_KILL_AUDIT`, `MON_CHECK_RESULT`, `MON_SEGMENT_SIZE`. 저장소(SQLite/H2) 문법으로 변환.
-3. **수집기 수정** (4.3) — 기존 60초 샘플러의 ASH 쿼리를 7분류+8분류 동시 집계로 확장해 `ash_wc_*` 8개를 추가 저장하고(기존 `ash_*` 7개 유지), 기동 시 1시간 backfill, 코어 쿼리 `NUM_CPU_CORES` 변경, DB 시각 차이 캐시. 7분류 CASE(샘플러·`getAshActivity()` 공유)와 8분류 CASE(샘플러·신규 `/top` 공유)를 각각 공통 상수로 모은다. (4) SQL 통계 델타 추가. ASH 구간 조회(4.3 (3))와 AWR 보충 경로는 `query-performance-reviewer`로 검토.
+3. **수집기 수정** (4.3) — 기존 60초 샘플러의 ASH 쿼리를 7분류+8분류 동시 집계로 확장해 `ash_wc_*` 8개를 추가 저장하고(기존 `ash_*` 7개 유지), 기동 시 1시간 backfill, DB 시각 차이 캐시 (코어 쿼리 `NUM_CPU_CORES` 변경은 2026-09-25 완료). 7분류 CASE(샘플러·`getAshActivity()` 공유)와 8분류 CASE(샘플러·신규 `/top` 공유)를 각각 공통 상수로 모은다. (4) SQL 통계 델타 추가. ASH 구간 조회(4.3 (3))와 AWR 보충 경로는 `query-performance-reviewer`로 검토.
 4. **API 구현** (7장).
 5. **상태바 수정** — 구간 버튼 추가, 수동 새로고침/자동 갱신 중지 연결 (3장).
 6. **DASHBOARD 본문 교체** — 기존 게이지·탭·테이블 제거, 8프레임 배치 (2장, 5장). 목업 `UI개선_mockup.html`의 HTML/CSS/차트 코드를 참고해도 된다 (차트는 라이브러리 없이 SVG로 그림).
